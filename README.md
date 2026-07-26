@@ -60,3 +60,9 @@ The FastAPI application binds to port `8000` by default. You can change this whe
 ```bash
 uvicorn main:app --host 0.0.0.0 --port 8000
 ```
+
+---
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
