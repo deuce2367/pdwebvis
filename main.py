@@ -1,10 +1,11 @@
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi_offline import FastAPIOffline
 import sqlite3
 import os
 
-app = FastAPI()
+app = FastAPIOffline(title="PDWeb API", description="Data visualization API for PRED_info records.", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -22,7 +23,7 @@ db_adapter = SQLiteAdapter(DB_PATH)
 def get_db():
     return db_adapter.get_connection()
 
-@app.get("/api/db/info")
+@app.get("/api/db/info", summary="Database Information", description="Returns connection info, schema, indexes, and basic statistics for the underlying SQLite database.")
 def get_db_info():
     return {
         "info": db_adapter.get_info(),
@@ -62,7 +63,7 @@ def build_time_filter(start_unix: float | None, end_unix: float | None, msics: l
     where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
     return where_clause, params
 
-@app.get("/api/data")
+@app.get("/api/data", summary="Raw Data Records", description="Fetches paginated raw records from the PRED_info table with optional filters.")
 def get_data(
     start_unix: float = Query(None, description="Start time in microseconds"),
     end_unix: float = Query(None, description="End time in microseconds"),
@@ -97,10 +98,13 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib.patheffects as path_effects
 from datetime import datetime
+import matplotlib.colors as mcolors
 
 plt.rcParams.update({'font.size': 10})
+in1_colors = ['#ebac23', '#b80058', '#008cf9', '#006e00', '#00bbad', '#d163e6', '#b24502', '#ff9287', '#5954d6', '#00c6f8', '#878500', '#00a76c', '#bdbdbd']
+plt.colormaps.register(cmap=mcolors.ListedColormap(in1_colors, name='IN1'))
 
-@app.get("/api/stats/histogram/{col}")
+@app.get("/api/stats/histogram/{col}", summary="Histogram Plot", description="Generates a matplotlib SVG showing the distribution of the selected column.")
 def get_histogram(
     col: str,
     start_unix: float = Query(None),
@@ -109,7 +113,7 @@ def get_histogram(
     evstrs: list[str] = Query(None),
     acq_hosts: list[str] = Query(None),
     theme: str = Query("light"),
-    colormap: str = Query("tab20")
+    colormap: str = Query("IN1")
 ):
     where_clause, params = build_time_filter(start_unix, end_unix, msics, evstrs, acq_hosts)
     
@@ -214,7 +218,7 @@ def get_histogram(
     plt.close(fig)
     return Response(content=buf.read(), media_type="image/svg+xml")
 
-@app.get("/api/stats/gantt")
+@app.get("/api/stats/gantt", summary="Gantt Chart", description="Generates a matplotlib SVG timeline Gantt chart for MSIC runs.")
 def get_gantt(
     start_unix: float = Query(None),
     end_unix: float = Query(None),
@@ -223,7 +227,7 @@ def get_gantt(
     acq_hosts: list[str] = Query(None),
     buckets: int = Query(360),
     theme: str = Query("light"),
-    colormap: str = Query("tab20")
+    colormap: str = Query("IN1")
 ):
     where_clause, params = build_time_filter(start_unix, end_unix, msics, evstrs, acq_hosts)
     
@@ -276,7 +280,8 @@ def get_gantt(
             if count > max_count:
                 max_count = count
 
-    fig, ax = plt.subplots(figsize=(30, 8))
+    fig_height = max(8, len(msic_buckets) * 0.5)
+    fig, ax = plt.subplots(figsize=(30, fig_height))
     
     bg_color = '#1e293b' if theme == 'dark' else '#ffffff'
     text_color = '#f8fafc' if theme == 'dark' else '#334155'
@@ -339,7 +344,7 @@ def get_gantt(
     
     ax.xaxis_date()
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
-    ax.xaxis.set_major_locator(mdates.AutoDateLocator(maxticks=8))
+    ax.xaxis.set_major_locator(mdates.AutoDateLocator(maxticks=24))
     plt.xticks(rotation=45, ha='right')
     ax.tick_params(top=False, right=False)
 
@@ -349,7 +354,7 @@ def get_gantt(
     plt.close(fig)
     return Response(content=buf.read(), media_type="image/svg+xml")
 
-@app.get("/api/stats/filters")
+@app.get("/api/stats/filters", summary="Filter Options", description="Returns distinct values for categorical columns (msic, evstr, acq_host) to populate frontend dropdowns.")
 def get_filters(
     start_unix: float = Query(None),
     end_unix: float = Query(None),
@@ -421,6 +426,8 @@ def get_timeline(
                 result_data[b] = r["count"]
                 
         return {"min_unix": min_unix, "max_unix": max_unix, "bucket_size": bucket_size, "data": result_data}
+
+
 
 # Mount static frontend if exists
 if os.path.exists("frontend/dist"):

@@ -6,8 +6,8 @@ import { Activity, BarChart2, Calendar, Database, Clock, Filter, ChevronLeft, Ch
 import DatabaseView from './DatabaseView';
 
 const COLORMAPS = [
+  { name: 'IN1', label: 'IN1', gradient: 'linear-gradient(to right, #ebac23, #b80058, #008cf9, #006e00, #00bbad, #d163e6, #b24502, #ff9287, #5954d6, #00c6f8, #878500, #00a76c, #bdbdbd)' },
   { name: 'tab20', label: 'Tab 20', gradient: 'linear-gradient(to right, #1f77b4, #aec7e8, #ff7f0e, #ffbb78, #2ca02c, #98df8a)' },
-  { name: 'tab10', label: 'Tab 10', gradient: 'linear-gradient(to right, #1f77b4, #ff7f0e, #2ca02c, #d62728, #9467bd, #8c564b)' },
   { name: 'Dark2', label: 'Dark 2', gradient: 'linear-gradient(to right, #1b9e77, #d95f02, #7570b3, #e7298a, #66a61e, #e6ab02)' },
   { name: 'Blues', label: 'Blues', gradient: 'linear-gradient(to right, #eff3ff, #bdd7e7, #6baed6, #3182bd, #08519c)' },
   { name: 'Greens', label: 'Greens', gradient: 'linear-gradient(to right, #edf8e9, #bae4b3, #74c476, #31a354, #006d2c)' },
@@ -280,7 +280,7 @@ export default function App() {
   const [gridApi, setGridApi] = useState(null);
   const [selectedRow, setSelectedRow] = useState(null);
   const [isLiveMode, setIsLiveMode] = useState(false);
-  const [colormap, setColormap] = useState('tab20');
+  const [colormap, setColormap] = useState('IN1');
   const [showPalette, setShowPalette] = useState(false);
 
   useEffect(() => {
@@ -474,7 +474,7 @@ export default function App() {
   const getGanttUrl = () => {
     const params = buildUrlParams();
     params.append('cb', imgKey);
-    params.append('buckets', 360);
+    params.append('buckets', 512);
     params.append('theme', theme);
     params.append('colormap', colormap);
     return `/api/stats/gantt?${params.toString()}`;
@@ -485,7 +485,7 @@ export default function App() {
     let end = appliedRange.end || globalBounds.end;
     if (!start || !end) return "";
     let diff = end - start;
-    let bucket_size = diff / 360;
+    let bucket_size = diff / 512;
     if (bucket_size < 5000000) bucket_size = 5000000;
     
     let sec = bucket_size / 1000000;
@@ -498,21 +498,24 @@ export default function App() {
   return (
     <div className="app-container">
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1>Data Visualization Dashboard</h1>
+        <h1 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          Data Visualization Dashboard
+          <a href="/docs" target="_blank" rel="noreferrer" style={{ fontSize: '8pt', color: 'var(--text-secondary)', textDecoration: 'none', marginLeft: '0.2rem', fontWeight: 'normal' }}>(API)</a>
+        </h1>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           <div style={{ color: 'var(--text-secondary)' }}>
             Total records: {totalRows.toLocaleString()}
           </div>
           <button 
             onClick={() => setIsLiveMode(!isLiveMode)} 
-            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid', borderColor: isLiveMode ? 'var(--accent-primary)' : 'var(--border-color)', background: isLiveMode ? 'var(--accent-primary)' : 'var(--bg-secondary)', color: isLiveMode ? '#fff' : 'var(--text-primary)', cursor: 'pointer', transition: 'all 0.2s' }}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', borderRadius: '4px', border: '1px solid', borderColor: isLiveMode ? 'var(--accent-primary)' : 'var(--border-color)', background: isLiveMode ? 'var(--accent-primary)' : 'var(--bg-secondary)', color: isLiveMode ? '#fff' : 'var(--text-primary)', cursor: 'pointer', transition: 'all 0.2s', height: '42px', fontSize: '1.08rem', fontWeight: 'bold' }}
           >
             {isLiveMode ? <Pause size={18} /> : <Play size={18} />}
             {isLiveMode ? 'Live Mode On' : 'Live Mode Off'}
           </button>
           <button 
             onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')} 
-            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', cursor: 'pointer' }}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', cursor: 'pointer', height: '42px', fontSize: '1.08rem', fontWeight: 'bold' }}
           >
             {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
             {theme === 'light' ? 'Dark Mode' : 'Light Mode'}
@@ -521,7 +524,7 @@ export default function App() {
           <div style={{ position: 'relative' }}>
             <button 
               onClick={() => setShowPalette(!showPalette)} 
-              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', cursor: 'pointer' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', cursor: 'pointer', height: '42px', fontSize: '1.08rem', fontWeight: 'bold' }}
             >
               <Palette size={18} /> Palette
             </button>
@@ -585,13 +588,13 @@ export default function App() {
         </div>
 
         <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-end' }}>
-          <button className="btn-primary" onClick={handleApplyFilters} style={{ padding: '0.5rem 1rem', fontSize: '1.08rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', height: '42px', borderRadius: '4px' }}>
-            <Filter size={18} style={{ marginRight: '7px' }} />
-            Apply Filters
+          <button className="btn-primary" onClick={handleApplyFilters} style={{ padding: '0 1rem', height: '36px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', borderRadius: '4px' }}>
+            <Filter size={16} style={{ marginRight: '7px' }} />
+            Apply
           </button>
           
-          <button className="btn-secondary" onClick={handleResetFilters} style={{ padding: '0.5rem 1rem', fontSize: '1.08rem', fontWeight: 'bold', border: 'none', borderRadius: '4px', background: '#ef4444', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', height: '42px' }}>
-            <RotateCcw size={18} style={{ marginRight: '7px' }} />
+          <button className="btn-secondary" onClick={handleResetFilters} style={{ padding: '0 1rem', height: '36px', fontSize: '0.9rem', border: 'none', borderRadius: '4px', background: '#ef4444', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+            <RotateCcw size={16} style={{ marginRight: '7px' }} />
             Reset
           </button>
         </div>
@@ -607,10 +610,12 @@ export default function App() {
       {activeTab === 'database' && <DatabaseView />}
       
       {activeTab === 'timeline' && (
-        <div className="card full-width">
-          <h2><Activity size={20} /> Activity <span style={{ fontSize: '0.9em', color: 'var(--text-secondary)', marginLeft: '8px', fontWeight: 'normal' }}>{getBinSizeStr()}</span></h2>
-          <div className="gantt-container" style={{ textAlign: 'center', width: '100%' }}>
-            <img src={getGanttUrl()} alt="Gantt Chart" style={{ width: '100%', height: 'auto', display: 'block' }} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }} className="full-width">
+          <div className="card">
+            <h2><Activity size={20} /> Activity <span style={{ fontSize: '0.9em', color: 'var(--text-secondary)', marginLeft: '8px', fontWeight: 'normal' }}>{getBinSizeStr()}</span></h2>
+            <div className="gantt-container" style={{ textAlign: 'center', width: '100%' }}>
+              <img src={getGanttUrl()} alt="Gantt Chart" style={{ width: '100%', height: 'auto', display: 'block' }} />
+            </div>
           </div>
         </div>
       )}
@@ -685,20 +690,52 @@ export default function App() {
 
       {selectedRow && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-          <div style={{ background: 'var(--bg-primary)', padding: '2rem', borderRadius: '8px', maxWidth: '800px', width: '90%', maxHeight: '90vh', overflowY: 'auto', border: '1px solid var(--border-color)', boxShadow: '0 10px 25px rgba(0,0,0,0.2)' }}>
+          <div style={{ background: 'var(--bg-primary)', padding: '2rem', borderRadius: '8px', maxWidth: '1200px', width: '90%', maxHeight: '90vh', overflowY: 'auto', border: '1px solid var(--border-color)', boxShadow: '0 10px 25px rgba(0,0,0,0.2)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
               <h2 style={{ margin: 0, display: 'flex', alignItems: 'center' }}><Database size={20} style={{ marginRight: '8px' }}/> Record Details</h2>
               <button onClick={() => setSelectedRow(null)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}>
                 <X size={24} />
               </button>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1rem' }}>
-              {Object.entries(selectedRow).map(([key, value]) => (
-                <div key={key} style={{ background: 'var(--bg-secondary)', padding: '0.8rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', marginBottom: '4px' }}>{key}</div>
-                  <div style={{ fontFamily: 'monospace', fontSize: '0.95rem', wordBreak: 'break-all' }}>{String(value)}</div>
-                </div>
-              ))}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '1rem' }}>
+              {Object.entries(selectedRow).map(([key, value]) => {
+                const strVal = String(value);
+                const isLarge = strVal.length > 80;
+                let displayVal = strVal;
+                let isJson = false;
+                if (typeof value === 'string' && (value.trim().startsWith('{') || value.trim().startsWith('['))) {
+                  try {
+                    const parsed = JSON.parse(value);
+                    displayVal = JSON.stringify(parsed, null, 2);
+                    isJson = true;
+                  } catch (e) {
+                    try {
+                      const parsed = JSON.parse(value.replace(/'/g, '"'));
+                      displayVal = JSON.stringify(parsed, null, 2);
+                      isJson = true;
+                    } catch (e2) {
+                      let inner = value.trim();
+                      if (inner.startsWith('{') && inner.endsWith('}')) {
+                         inner = inner.substring(1, inner.length - 1);
+                         let parts = inner.split(',').map(p => '  ' + p.trim());
+                         displayVal = '{\n' + parts.join(',\n') + '\n}';
+                         isJson = true;
+                      }
+                    }
+                  }
+                }
+                
+                return (
+                  <div key={key} style={{ background: 'var(--bg-secondary)', padding: '0.8rem', borderRadius: '6px', border: '1px solid var(--border-color)', gridColumn: isLarge || isJson ? '1 / -1' : 'auto' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', marginBottom: '4px' }}>{key}</div>
+                    {isJson ? (
+                      <pre style={{ margin: 0, fontFamily: 'monospace', fontSize: '0.85rem', overflowX: 'auto', color: 'var(--accent-secondary)' }}>{displayVal}</pre>
+                    ) : (
+                      <div style={{ fontFamily: 'monospace', fontSize: '0.95rem', wordBreak: 'break-all' }}>{displayVal}</div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

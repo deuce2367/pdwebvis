@@ -17,4 +17,4 @@ COPY generate_data.py .
 
 # We'll run generate_data.py if DB doesn't exist, then start the server
 # The port is standard 8000
-CMD python3 generate_data.py --db test.db && uvicorn main:app --host 0.0.0.0 --port 8000
+CMD ["sh", "-c", "python3 generate_data.py --db test.db && uvicorn main:app --host 0.0.0.0 --port 8000"]
