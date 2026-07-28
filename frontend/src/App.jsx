@@ -2,17 +2,23 @@ import React, { useState, useEffect } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
-import { Activity, BarChart2, Calendar, Database, Clock, Filter, ChevronLeft, ChevronRight, Check, RotateCcw, Sun, Moon, Download, Play, Pause, X, Palette } from 'lucide-react';
+import { Activity, BarChart2, Calendar, Database, Clock, Filter, ChevronLeft, ChevronRight, Check, RotateCcw, Sun, Moon, Download, Play, Pause, X, Palette, ZoomIn, ZoomOut } from 'lucide-react';
 import DatabaseView from './DatabaseView';
 
 const COLORMAPS = [
-  { name: 'IN1', label: 'IN1', gradient: 'linear-gradient(to right, #ebac23, #b80058, #008cf9, #006e00, #00bbad, #d163e6, #b24502, #ff9287, #5954d6, #00c6f8, #878500, #00a76c, #bdbdbd)' },
-  { name: 'tab20', label: 'Tab 20', gradient: 'linear-gradient(to right, #1f77b4, #aec7e8, #ff7f0e, #ffbb78, #2ca02c, #98df8a)' },
-  { name: 'Dark2', label: 'Dark 2', gradient: 'linear-gradient(to right, #1b9e77, #d95f02, #7570b3, #e7298a, #66a61e, #e6ab02)' },
   { name: 'Blues', label: 'Blues', gradient: 'linear-gradient(to right, #eff3ff, #bdd7e7, #6baed6, #3182bd, #08519c)' },
+  { name: 'bone_r', label: 'Bone Reversed', gradient: 'linear-gradient(to right, #ffffff, #c7c7c7, #929292, #636363, #363636, #000000)' },
+  { name: 'Dark2_r', label: 'Dark 2 Reversed', gradient: 'linear-gradient(to right, #e6ab02, #66a61e, #e7298a, #7570b3, #d95f02, #1b9e77)' },
   { name: 'Greens', label: 'Greens', gradient: 'linear-gradient(to right, #edf8e9, #bae4b3, #74c476, #31a354, #006d2c)' },
+  { name: 'Greys', label: 'Greys', gradient: 'linear-gradient(to right, #f7f7f7, #cccccc, #969696, #636363, #252525)' },
+  { name: 'IN1', label: 'IN1', gradient: 'linear-gradient(to right, #ebac23, #b80058, #008cf9, #006e00, #00bbad, #d163e6, #b24502, #ff9287, #5954d6, #00c6f8, #878500, #00a76c, #bdbdbd)' },
+  { name: 'Paired', label: 'Paired', gradient: 'linear-gradient(to right, #a6cee3, #1f78b4, #b2df8a, #33a02c, #fb9a99, #e31a1c)' },
+  { name: 'Purples', label: 'Purples', gradient: 'linear-gradient(to right, #f2f0f7, #cbc9e2, #9e9ac8, #756bb1, #54278f)' },
+  { name: 'RdPu_r', label: 'Red-Purple Reversed', gradient: 'linear-gradient(to right, #7a0177, #c51b8a, #f768a1, #fbb4b9, #feebe2)' },
   { name: 'Reds', label: 'Reds', gradient: 'linear-gradient(to right, #fee5d9, #fcae91, #fb6a4a, #de2d26, #a50f15)' },
-  { name: 'Purples', label: 'Purples', gradient: 'linear-gradient(to right, #f2f0f7, #cbc9e2, #9e9ac8, #756bb1, #54278f)' }
+  { name: 'summer', label: 'Summer', gradient: 'linear-gradient(to right, #008066, #66b366, #ccff66, #ffff66)' },
+  { name: 'tab20', label: 'Tab 20', gradient: 'linear-gradient(to right, #1f77b4, #aec7e8, #ff7f0e, #ffbb78, #2ca02c, #98df8a)' },
+  { name: 'YlGnBu_r', label: 'Yellow-Green-Blue Reversed', gradient: 'linear-gradient(to right, #081d58, #225ea8, #41b6c4, #7fcdbb, #c7e9b4, #ffffcc)' }
 ];
 
 const MultiSelect = ({ options, selected, onChange, placeholder }) => {
@@ -97,7 +103,7 @@ const parseDt = (str) => {
 
 const TIMELINE_BUCKETS = 32;
 
-const TimelineBrush = ({ appliedRange, appliedMsics, appliedEvstrs, appliedAcqHosts, stagedRange, onRangeChange }) => {
+const TimelineBrush = ({ appliedRange, appliedMsics, appliedEvstrs, appliedAcqHosts, stagedRange, onRangeChange, isRelativeMode, setIsRelativeMode, relativeValue, setRelativeValue, relativeUnit, setRelativeUnit, onZoomIn, onZoomOut }) => {
   const [data, setData] = useState(new Array(TIMELINE_BUCKETS).fill(0));
   const [meta, setMeta] = useState(null);
   
@@ -147,6 +153,7 @@ const TimelineBrush = ({ appliedRange, appliedMsics, appliedEvstrs, appliedAcqHo
   const handlePointerDown = (e, thumb) => {
     e.preventDefault();
     setDraggingThumb(thumb);
+    if (isRelativeMode) setIsRelativeMode(false);
   };
 
   useEffect(() => {
@@ -200,32 +207,73 @@ const TimelineBrush = ({ appliedRange, appliedMsics, appliedEvstrs, appliedAcqHo
   }
 
   return (
-    <div style={{ width: '600px', display: 'flex', alignItems: 'flex-end', gap: '1.2rem' }}>
+    <div style={{ width: '600px', display: 'flex', alignItems: 'flex-end', gap: '0.8rem' }}>
       
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', minWidth: '190px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <div style={{ width: '48px', fontSize: '0.75rem', textAlign: 'right', color: 'var(--text-secondary)' }}>From:</div>
-          <input 
-            type="text" 
-            value={manualStart} 
-            onChange={e => setManualStart(e.target.value)} 
-            onBlur={handleManualApply}
-            onKeyDown={e => e.key === 'Enter' && handleManualApply()}
-            style={{ flex: 1, padding: '0.36rem', border: '1px solid var(--border-color)', borderRadius: '4px', fontSize: '1.08rem', fontFamily: 'monospace', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }} 
-            placeholder="YYYY-MM-DD HH:MM:SS"
-          />
+      <div style={{ display: 'flex', gap: '0.1rem', minWidth: '320px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <button onClick={() => setIsRelativeMode(false)} style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem', borderRadius: '4px', background: !isRelativeMode ? 'var(--accent-primary)' : 'var(--bg-secondary)', color: !isRelativeMode ? '#fff' : 'var(--text-primary)', border: '1px solid var(--border-color)', cursor: 'pointer' }}>Absolute</button>
+          <button onClick={() => setIsRelativeMode(true)} style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem', borderRadius: '4px', background: isRelativeMode ? 'var(--accent-primary)' : 'var(--bg-secondary)', color: isRelativeMode ? '#fff' : 'var(--text-primary)', border: '1px solid var(--border-color)', cursor: 'pointer' }}>Relative</button>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <div style={{ width: '48px', fontSize: '0.75rem', textAlign: 'right', color: 'var(--text-secondary)' }}>To:</div>
-          <input 
-            type="text" 
-            value={manualEnd} 
-            onChange={e => setManualEnd(e.target.value)} 
-            onBlur={handleManualApply}
-            onKeyDown={e => e.key === 'Enter' && handleManualApply()}
-            style={{ flex: 1, padding: '0.36rem', border: '1px solid var(--border-color)', borderRadius: '4px', fontSize: '1.08rem', fontFamily: 'monospace', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }} 
-            placeholder="YYYY-MM-DD HH:MM:SS"
-          />
+        
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', flex: 1 }}>
+          {!isRelativeMode ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <div style={{ width: '48px', fontSize: '0.75rem', textAlign: 'right', color: 'var(--text-secondary)' }}>From:</div>
+                <input 
+                  type="text" 
+                  value={manualStart} 
+                  onChange={e => setManualStart(e.target.value)} 
+                  onBlur={handleManualApply}
+                  onKeyDown={e => e.key === 'Enter' && handleManualApply()}
+                  style={{ flex: 1, padding: '0.36rem', border: '1px solid var(--border-color)', borderRadius: '4px', fontSize: '1.08rem', fontFamily: 'monospace', background: 'var(--bg-secondary)', color: 'var(--text-primary)', height: '36px', boxSizing: 'border-box' }} 
+                  placeholder="YYYY-MM-DD HH:MM:SS"
+                />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <div style={{ width: '48px', fontSize: '0.75rem', textAlign: 'right', color: 'var(--text-secondary)' }}>To:</div>
+                <input 
+                  type="text" 
+                  value={manualEnd} 
+                  onChange={e => setManualEnd(e.target.value)} 
+                  onBlur={handleManualApply}
+                  onKeyDown={e => e.key === 'Enter' && handleManualApply()}
+                  style={{ flex: 1, padding: '0.36rem', border: '1px solid var(--border-color)', borderRadius: '4px', fontSize: '1.08rem', fontFamily: 'monospace', background: 'var(--bg-secondary)', color: 'var(--text-primary)', height: '36px', boxSizing: 'border-box' }} 
+                  placeholder="YYYY-MM-DD HH:MM:SS"
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <div style={{ width: '48px', fontSize: '0.75rem', textAlign: 'right', color: 'var(--text-secondary)' }}>Last:</div>
+                <input 
+                  type="text" 
+                  value={relativeValue} 
+                  onChange={e => {
+                    const val = e.target.value.replace(/\D/g, '');
+                    setRelativeValue(val ? parseInt(val) : '');
+                  }} 
+                  style={{ flex: 1, padding: '0.36rem', border: '1px solid var(--border-color)', borderRadius: '4px', fontSize: '1.08rem', background: 'var(--bg-secondary)', color: 'var(--text-primary)', height: '36px', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <div style={{ width: '48px', fontSize: '0.75rem', textAlign: 'right', color: 'var(--text-secondary)' }}>Unit:</div>
+                <select 
+                  value={relativeUnit} 
+                  onChange={e => setRelativeUnit(e.target.value)} 
+                  style={{ flex: 1, padding: '0.36rem', border: '1px solid var(--border-color)', borderRadius: '4px', fontSize: '1.08rem', background: 'var(--bg-secondary)', color: 'var(--text-primary)', height: '36px', boxSizing: 'border-box' }}
+                >
+                  <option value="seconds">Seconds</option>
+                  <option value="minutes">Minutes</option>
+                  <option value="hours">Hours</option>
+                  <option value="days">Days</option>
+                  <option value="weeks">Weeks</option>
+                  <option value="months">Months</option>
+                </select>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -265,6 +313,10 @@ const TimelineBrush = ({ appliedRange, appliedMsics, appliedEvstrs, appliedAcqHo
           />
         </div>
       </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', justifyContent: 'center', marginLeft: '0.2rem' }}>
+        <button onClick={onZoomIn} style={{ padding: '0.2rem', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '4px', cursor: 'pointer', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Zoom In"><ZoomIn size={16} /></button>
+        <button onClick={onZoomOut} style={{ padding: '0.2rem', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '4px', cursor: 'pointer', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Zoom Out"><ZoomOut size={16} /></button>
+      </div>
     </div>
   );
 };
@@ -280,6 +332,11 @@ export default function App() {
   const [gridApi, setGridApi] = useState(null);
   const [selectedRow, setSelectedRow] = useState(null);
   const [isLiveMode, setIsLiveMode] = useState(false);
+  const [isRelativeMode, setIsRelativeMode] = useState(false);
+  const [relativeValue, setRelativeValue] = useState(15);
+  const [relativeUnit, setRelativeUnit] = useState('minutes');
+  const [maxCoverageDuration, setMaxCoverageDuration] = useState(1);
+  const [coverageData, setCoverageData] = useState([]);
   const [colormap, setColormap] = useState('IN1');
   const [showPalette, setShowPalette] = useState(false);
 
@@ -309,10 +366,27 @@ export default function App() {
   const [filtersInitialized, setFiltersInitialized] = useState(false);
   const [globalBounds, setGlobalBounds] = useState({ start: null, end: null });
 
+  const getActiveTimeRange = () => {
+    if (isRelativeMode) {
+      const end_u = Date.now() * 1000;
+      let multiplier = 60 * 1000000;
+      if (relativeUnit === 'seconds') multiplier = 1000000;
+      if (relativeUnit === 'hours') multiplier = 60 * 60 * 1000000;
+      if (relativeUnit === 'days') multiplier = 24 * 60 * 60 * 1000000;
+      if (relativeUnit === 'weeks') multiplier = 7 * 24 * 60 * 60 * 1000000;
+      if (relativeUnit === 'months') multiplier = 30 * 24 * 60 * 60 * 1000000;
+      const val = parseInt(relativeValue) || 1;
+      const start_u = end_u - (val * multiplier);
+      return { start: start_u, end: end_u };
+    }
+    return appliedRange;
+  };
+
   const fetchFilters = async () => {
     const params = new URLSearchParams();
-    if (appliedRange.start) params.append('start_unix', appliedRange.start);
-    if (appliedRange.end) params.append('end_unix', appliedRange.end);
+    const r = getActiveTimeRange();
+    if (r.start) params.append('start_unix', r.start);
+    if (r.end) params.append('end_unix', r.end);
     
     try {
       const res = await fetch('/api/stats/filters?' + params.toString());
@@ -341,24 +415,29 @@ export default function App() {
   useEffect(() => {
     if (!isLiveMode) return;
     const timer = setInterval(() => {
-      fetch('/api/stats/filters').then(r => r.json()).then(json => {
-        if (json.max_unix && globalBounds.end && json.max_unix > globalBounds.end) {
-          setGlobalBounds(prev => ({ ...prev, end: json.max_unix }));
-          setAppliedRange(prev => ({ ...prev, end: json.max_unix }));
-          setStagedRange(prev => ({ ...prev, end: json.max_unix }));
-        }
-      }).catch(e => console.error("Live fetch error", e));
+      if (isRelativeMode) {
+        setImgKey(Date.now());
+      } else {
+        fetch('/api/stats/filters').then(r => r.json()).then(json => {
+          if (json.max_unix && globalBounds.end && json.max_unix > globalBounds.end) {
+            setGlobalBounds(prev => ({ ...prev, end: json.max_unix }));
+            setAppliedRange(prev => ({ ...prev, end: json.max_unix }));
+            setStagedRange(prev => ({ ...prev, end: json.max_unix }));
+          }
+        }).catch(e => console.error("Live fetch error", e));
+      }
     }, 5000);
     return () => clearInterval(timer);
-  }, [isLiveMode, globalBounds.end]);
+  }, [isLiveMode, isRelativeMode, globalBounds.end]);
 
   const fetchData = async () => {
-    if (!appliedRange.start && !appliedRange.end) return;
+    const r = getActiveTimeRange();
+    if (!r.start && !r.end) return;
 
     const params = new URLSearchParams();
     params.append('limit', 10000);
-    if (appliedRange.start) params.append('start_unix', appliedRange.start);
-    if (appliedRange.end) params.append('end_unix', appliedRange.end);
+    if (r.start) params.append('start_unix', r.start);
+    if (r.end) params.append('end_unix', r.end);
     if (appliedMsics !== null) {
       if (appliedMsics.length === 0) params.append('msics', '__NONE__');
       else appliedMsics.forEach(m => params.append('msics', m));
@@ -387,6 +466,59 @@ export default function App() {
   useEffect(() => {
     fetchData();
   }, [appliedRange, appliedMsics, appliedEvstrs, appliedAcqHosts]);
+
+
+  const handleZoomIn = () => {
+    setIsRelativeMode(false);
+    const r = getActiveTimeRange();
+    if (!r.start || !r.end) return;
+    const dur = r.end - r.start;
+    const mid = r.start + dur / 2;
+    const newDur = dur / 2;
+    const newStart = mid - newDur / 2;
+    const newEnd = mid + newDur / 2;
+    setStagedRange({ start: newStart, end: newEnd });
+    setAppliedRange({ start: newStart, end: newEnd });
+  };
+
+  const handleZoomOut = () => {
+    setIsRelativeMode(false);
+    const r = getActiveTimeRange();
+    if (!r.start || !r.end) return;
+    const dur = r.end - r.start;
+    const mid = r.start + dur / 2;
+    const newDur = dur * 2;
+    let newStart = mid - newDur / 2;
+    let newEnd = mid + newDur / 2;
+    if (globalBounds.start && newStart < globalBounds.start) newStart = globalBounds.start;
+    if (globalBounds.end && newEnd > globalBounds.end) newEnd = globalBounds.end;
+    setStagedRange({ start: newStart, end: newEnd });
+    setAppliedRange({ start: newStart, end: newEnd });
+  };
+
+  const fetchCoverage = async () => {
+    const params = new URLSearchParams();
+    const r = getActiveTimeRange();
+    if (r.start) params.append('start_unix', r.start);
+    if (r.end) params.append('end_unix', r.end);
+    if (appliedMsics !== null) appliedMsics.length === 0 ? params.append('msics', '__NONE__') : appliedMsics.forEach(m => params.append('msics', m));
+    if (appliedEvstrs !== null) appliedEvstrs.length === 0 ? params.append('evstrs', '__NONE__') : appliedEvstrs.forEach(e => params.append('evstrs', e));
+    if (appliedAcqHosts !== null) appliedAcqHosts.length === 0 ? params.append('acq_hosts', '__NONE__') : appliedAcqHosts.forEach(h => params.append('acq_hosts', h));
+    
+    try {
+      const res = await fetch('/api/stats/coverage_table?' + params.toString());
+      const json = await res.json();
+      setCoverageData(json);
+      const maxVal = Math.max(...json.map(d => d.total_duration || 0), 1);
+      setMaxCoverageDuration(maxVal);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'coverage') fetchCoverage();
+  }, [activeTab, appliedRange, isRelativeMode, relativeValue, relativeUnit, appliedMsics, appliedEvstrs, appliedAcqHosts, imgKey]);
 
   const handleApplyFilters = () => {
     setAppliedRange(stagedRange);
@@ -442,8 +574,9 @@ export default function App() {
 
   const buildUrlParams = () => {
     const params = new URLSearchParams();
-    if (appliedRange.start) params.append('start_unix', appliedRange.start);
-    if (appliedRange.end) params.append('end_unix', appliedRange.end);
+    const r = getActiveTimeRange();
+    if (r.start) params.append('start_unix', r.start);
+    if (r.end) params.append('end_unix', r.end);
     
     if (appliedMsics !== null) {
       if (appliedMsics.length === 0) params.append('msics', '__NONE__');
@@ -481,8 +614,9 @@ export default function App() {
   };
 
   const getBinSizeStr = () => {
-    let start = appliedRange.start || globalBounds.start;
-    let end = appliedRange.end || globalBounds.end;
+    const r = getActiveTimeRange();
+    let start = r.start || globalBounds.start;
+    let end = r.end || globalBounds.end;
     if (!start || !end) return "";
     let diff = end - start;
     let bucket_size = diff / 512;
@@ -546,7 +680,7 @@ export default function App() {
         </div>
       </header>
 
-      <div className="filters-bar" style={{ display: 'flex', gap: '1.8rem', justifyContent: 'center', alignItems: 'flex-end', flexWrap: 'wrap', background: 'var(--bg-primary)', padding: '1.2rem', borderRadius: '8px', border: '1px solid var(--border-color)', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+      <div className="filters-bar" style={{ display: 'flex', gap: '0.8rem', justifyContent: 'center', alignItems: 'flex-end', flexWrap: 'wrap', background: 'var(--bg-primary)', padding: '1.2rem', borderRadius: '8px', border: '1px solid var(--border-color)', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
         
         <TimelineBrush 
           appliedRange={appliedRange}
@@ -555,6 +689,14 @@ export default function App() {
           appliedAcqHosts={appliedAcqHosts}
           stagedRange={stagedRange}
           onRangeChange={setStagedRange} 
+          isRelativeMode={isRelativeMode}
+          setIsRelativeMode={setIsRelativeMode}
+          relativeValue={relativeValue}
+          setRelativeValue={setRelativeValue}
+          relativeUnit={relativeUnit}
+          setRelativeUnit={setRelativeUnit}
+          onZoomIn={handleZoomIn}
+          onZoomOut={handleZoomOut}
         />
         
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', minWidth: '160px', justifyContent: 'flex-end' }}>
@@ -603,11 +745,76 @@ export default function App() {
       <div className="tabs">
         <button className={`tab-btn ${activeTab === 'summary' ? 'active' : ''}`} onClick={() => setActiveTab('summary')}>Summary</button>
         <button className={`tab-btn ${activeTab === 'timeline' ? 'active' : ''}`} onClick={() => setActiveTab('timeline')}>Timeline</button>
+        <button className={`tab-btn ${activeTab === 'coverage' ? 'active' : ''}`} onClick={() => setActiveTab('coverage')}>Coverage</button>
         <button className={`tab-btn ${activeTab === 'data' ? 'active' : ''}`} onClick={() => setActiveTab('data')}>Data Table</button>
         <button className={`tab-btn ${activeTab === 'database' ? 'active' : ''}`} onClick={() => setActiveTab('database')}>Database</button>
       </div>
       
       {activeTab === 'database' && <DatabaseView />}
+
+      {activeTab === 'coverage' && (
+        <div className="card full-width" style={{ height: '500px', display: 'flex', flexDirection: 'column' }}>
+          <h2><Activity size={20} /> Coverage</h2>
+          <div className="ag-theme-alpine" style={{ width: '100%', flex: 1, marginTop: '1rem' }}>
+            <AgGridReact
+              key={colormap}
+              rowData={coverageData}
+              columnDefs={[
+                { 
+                  field: 'num_receivers', 
+                  headerName: '# of Receivers', 
+                  width: 160,
+                  cellRenderer: (params) => {
+                     const numRecv = params.value || 1;
+                     let icon = '⚠️';
+                     let title = 'Warning (1 or 2)';
+                     if (numRecv === 3) { icon = '✅'; title = 'Good (3)'; }
+                     else if (numRecv > 3) { icon = '🚀'; title = 'Great (4+)'; }
+                     return <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}><span title={title} style={{fontSize: '16px'}}>{icon}</span> <span>{numRecv}</span></div>;
+                  }
+                },
+                { field: 'msic_set', headerName: 'Set of Receivers', flex: 1 },
+                { field: 'num_periods', headerName: '# of Periods', width: 140 },
+                { field: 'num_dates', headerName: '# of Dates', width: 140 },
+                { 
+                  field: 'total_duration', 
+                  headerName: 'Total Duration', 
+                  flex: 1,
+                  cellRenderer: (params) => {
+                     if (params.value === undefined || params.value === null) return '0s';
+                     const val = params.value;
+                     const numRecv = params.data.num_receivers || 1;
+                     
+                     const cmap = COLORMAPS.find(c => c.name === colormap) || COLORMAPS[0];
+                     const colors = cmap.gradient.match(/#[0-9a-fA-F]{6}/g) || ['var(--accent-primary)'];
+                     const barColor = colors[Math.max(0, numRecv - 1) % colors.length];
+                     
+                     let formatted = val.toFixed(1) + 's';
+                     if (val >= 86400) formatted = (val / 86400).toFixed(1) + 'd';
+                     else if (val >= 3600) formatted = (val / 3600).toFixed(1) + 'h';
+                     else if (val >= 60) formatted = (val / 60).toFixed(1) + 'm';
+                     
+                     const pct = Math.min((val / maxCoverageDuration) * 100, 100);
+                     
+                     return (
+                       <div style={{ display: 'flex', alignItems: 'center', width: '100%', height: '100%', gap: '10px' }}>
+                         <span style={{ width: '60px', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                           {formatted}
+                         </span>
+                         <div style={{ flex: 1, background: 'var(--bg-secondary)', height: '12px', borderRadius: '2px', overflow: 'hidden' }}>
+                           <div style={{ width: `${pct}%`, background: barColor, height: '100%' }}></div>
+                         </div>
+                       </div>
+                     );
+                  }
+                }
+              ]}
+              defaultColDef={{ sortable: true, filter: true, resizable: true }}
+            />
+          </div>
+        </div>
+      )}
+
       
       {activeTab === 'timeline' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }} className="full-width">
@@ -729,7 +936,21 @@ export default function App() {
                   <div key={key} style={{ background: 'var(--bg-secondary)', padding: '0.8rem', borderRadius: '6px', border: '1px solid var(--border-color)', gridColumn: isLarge || isJson ? '1 / -1' : 'auto' }}>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', marginBottom: '4px' }}>{key}</div>
                     {isJson ? (
-                      <pre style={{ margin: 0, fontFamily: 'monospace', fontSize: '0.85rem', overflowX: 'auto', color: 'var(--accent-secondary)' }}>{displayVal}</pre>
+                      <pre 
+                        style={{ margin: 0, fontFamily: 'monospace', fontSize: '0.85rem', overflowX: 'auto', color: 'var(--text-primary)' }}
+                        dangerouslySetInnerHTML={{ 
+                          __html: displayVal.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+                            let color = 'var(--text-primary)';
+                            if (/^"/.test(match)) {
+                              if (/:$/.test(match)) color = 'var(--accent-primary)'; // key
+                              else color = '#2ca02c'; // string
+                            } else if (/true|false/.test(match)) color = '#1f77b4';
+                            else if (/null/.test(match)) color = '#7f7f7f';
+                            else color = '#ff7f0e'; // number
+                            return '<span style="color: ' + color + '">' + match + '</span>';
+                          })
+                        }}
+                      />
                     ) : (
                       <div style={{ fontFamily: 'monospace', fontSize: '0.95rem', wordBreak: 'break-all' }}>{displayVal}</div>
                     )}

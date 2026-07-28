@@ -157,26 +157,30 @@ def get_histogram(
         
         labels = [format_msic(b) if col == "msic" else b for b in bins]
         
-        # Donut plot
-        wedges, texts, autotexts = ax.pie(
-            counts, 
-            labels=None, 
-            autopct='%1.1f%%', 
-            pctdistance=0.75,
-            colors=colors,
-            textprops={'color': text_color, 'fontsize': 9},
-            wedgeprops={'width': 0.4, 'edgecolor': bg_color},
-            radius=1.2
-        )
-        
-        # Ensure percentages are always white and readable against colored wedges
-        for autotext in autotexts:
-            autotext.set_color('white')
-            autotext.set_weight('bold')
-            autotext.set_path_effects([path_effects.withStroke(linewidth=1, foreground='#333333')])
-        
-        legend_labels = [f"{l} ({c:,})" for l, c in zip(labels, counts)]
-        legend = ax.legend(wedges, legend_labels, loc="center left", bbox_to_anchor=(1, 0.5), frameon=False, labelcolor=text_color)
+        if not counts or sum(counts) == 0:
+            ax.text(0.5, 0.5, "No data available", ha='center', va='center', color=text_color, transform=ax.transAxes)
+            ax.axis('off')
+        else:
+            # Donut plot
+            wedges, texts, autotexts = ax.pie(
+                counts, 
+                labels=None, 
+                autopct='%1.1f%%', 
+                pctdistance=0.75,
+                colors=colors,
+                textprops={'color': text_color, 'fontsize': 9},
+                wedgeprops={'width': 0.4, 'edgecolor': bg_color},
+                radius=1.2
+            )
+            
+            # Ensure percentages are always white and readable against colored wedges
+            for autotext in autotexts:
+                autotext.set_color('white')
+                autotext.set_weight('bold')
+                autotext.set_path_effects([path_effects.withStroke(linewidth=1, foreground='#333333')])
+            
+            legend_labels = [f"{l} ({c:,})" for l, c in zip(labels, counts)]
+            legend = ax.legend(wedges, legend_labels, loc="center left", bbox_to_anchor=(1, 0.5), frameon=False, labelcolor=text_color)
         
         # Adjust layout to fit legend and reduce padding
         fig.subplots_adjust(left=0, right=0.65, top=1, bottom=0)
@@ -378,6 +382,57 @@ def get_filters(
         acq_hosts_list = [str(r["acq_host"]) for r in cursor.fetchall()]
         
         return {"min_unix": row["min_unix"], "max_unix": row["max_unix"], "msics": msics_list, "evstrs": evstrs_list, "acq_hosts": acq_hosts_list}
+
+@app.get("/api/stats/coverage_table", summary="Coverage Table", description="Generates aggregated coverage table.")
+def get_coverage_table(
+    start_unix: float = Query(None, description="Start Unix timestamp (us)"),
+    end_unix: float = Query(None, description="End Unix timestamp (us)"),
+    msics: list[str] = Query(None, description="List of MSIC filters"),
+    evstrs: list[str] = Query(None, description="List of EVSTR filters"),
+    acq_hosts: list[str] = Query(None, description="List of ACQ_HOST filters")
+):
+    where_clause, params = build_time_filter(start_unix, end_unix, msics, evstrs, acq_hosts)
+    
+    with get_db() as conn:
+        cursor = conn.cursor()
+        
+        query = f"""
+            WITH period_msics AS (
+                SELECT 
+                    date8, 
+                    time8, 
+                    GROUP_CONCAT(msic) as msic_set,
+                    COUNT(msic) as num_receivers,
+                    MAX(nelem / (rx_srate * 1000000.0)) as period_duration
+                FROM (
+                    SELECT date8, time8, msic, nelem, rx_srate
+                    FROM PRED_info
+                    {where_clause}
+                    ORDER BY date8, time8, msic
+                )
+                GROUP BY date8, time8
+            )
+            SELECT 
+                msic_set,
+                MAX(num_receivers) as num_receivers,
+                COUNT(*) as num_periods,
+                COUNT(DISTINCT date8) as num_dates,
+                SUM(period_duration) as total_duration
+            FROM period_msics
+            GROUP BY msic_set
+            ORDER BY total_duration DESC
+        """
+        
+        cursor.execute(query, params)
+        rows = []
+        for r in cursor.fetchall():
+            d = dict(r)
+            if d.get("msic_set"):
+                msics_list = d["msic_set"].split(",")
+                d["msic_set"] = ", ".join([format_msic(m) for m in msics_list])
+            rows.append(d)
+            
+    return rows
 
 @app.get("/api/stats/timeline")
 def get_timeline(

@@ -5,6 +5,22 @@ import string
 import time
 import os
 import datetime
+import json
+
+def generate_random_json():
+    num_pairs = random.randint(5, 20)
+    data = {}
+    keys = ["status", "version", "mode", "temperature", "voltage", "calibration_id", "gain", "offset", "snr", "ber", "modulation", "bandwidth", "frequency", "agc_level", "rx_port", "antenna", "location", "operator", "sw_rev", "hw_rev", "target", "mission", "encryption", "compression"]
+    for _ in range(num_pairs):
+        key = random.choice(keys) + "_" + generate_random_string(2).lower()
+        if random.random() < 0.3:
+            value = generate_random_string(8)
+        elif random.random() < 0.6:
+            value = random.choice(["active", "standby", "offline", "nominal", "critical", "warning", "calibrating"])
+        else:
+            value = round(random.uniform(0.1, 100.0), 2)
+        data[key] = value
+    return json.dumps(data)
 
 def generate_random_string(length):
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
@@ -100,7 +116,7 @@ def generate_data(hours, interval):
                     
                     msic = msic_map[mssn]
                     rx_srate_val = 20.0
-                    nelem_val = int(rx_srate_val * 1e6 * interval)
+                    nelem_val = int(rx_srate_val * 1e6 * 5.0) + random.randint(-8192, 8192)
                     
                     row = (
                         evnt,
@@ -129,8 +145,8 @@ def generate_data(hours, interval):
                         date8, # date8
                         time8, # time8
                         random.choice(acq_hosts), # acq_host
-                        f'{{A:MG_EVENT="{evstr}"}}', # tag_gen
-                        '{D:RX_BW=10,LD_SNAP_ETF=' + str(random.randint(1000, 3000)) + '}' # tag_acq
+                        generate_random_json(), # tag_gen
+                        generate_random_json() # tag_acq
                     )
                     data.append(row)
                 
