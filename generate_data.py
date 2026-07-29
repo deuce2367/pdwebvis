@@ -6,7 +6,7 @@ import time
 import os
 import datetime
 import json
-from db_adapter import SQLiteAdapter, PostgresAdapter
+from db_adapter import SQLiteAdapter, PostgresAdapter, MariaDBAdapter
 
 def generate_random_json():
     num_pairs = random.randint(5, 20)
@@ -171,6 +171,8 @@ def main():
 
     if args.db_url and (args.db_url.startswith('postgres://') or args.db_url.startswith('postgresql://')):
         db_adapter = PostgresAdapter(args.db_url)
+    elif args.db_url and (args.db_url.startswith('mysql://') or args.db_url.startswith('mariadb://')):
+        db_adapter = MariaDBAdapter(args.db_url)
     else:
         db_adapter = SQLiteAdapter(args.db)
         # Apply schema for sqlite if missing

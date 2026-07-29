@@ -15,7 +15,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from db_adapter import SQLiteAdapter, PostgresAdapter
+from db_adapter import SQLiteAdapter, PostgresAdapter, MariaDBAdapter
 import os
 
 DB_PATH = "test.db"
@@ -23,6 +23,8 @@ DATABASE_URL = os.environ.get('DATABASE_URL')
 
 if DATABASE_URL and (DATABASE_URL.startswith('postgres://') or DATABASE_URL.startswith('postgresql://')):
     db_adapter = PostgresAdapter(DATABASE_URL)
+elif DATABASE_URL and (DATABASE_URL.startswith('mysql://') or DATABASE_URL.startswith('mariadb://')):
+    db_adapter = MariaDBAdapter(DATABASE_URL)
 else:
     db_adapter = SQLiteAdapter(DB_PATH)
 
@@ -415,7 +417,7 @@ def get_coverage_table(
                     FROM PRED_info
                     {where_clause}
                     ORDER BY date8, time8, msic
-                )
+                ) AS subq
                 GROUP BY date8, time8
             )
             SELECT 

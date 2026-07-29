@@ -248,3 +248,136 @@ class PostgresAdapter(DatabaseAdapter):
             stats["total_rows"] = row["count"] if row else 0
             
         return stats
+
+class MariaDBCursorWrapper(BaseCursor):
+    def __init__(self, cursor):
+        self.cursor = cursor
+
+    def execute(self, query, params=None):
+        return self.cursor.execute(self._convert_query(query), params or [])
+
+    def executemany(self, query, params_list):
+        return self.cursor.executemany(self._convert_query(query), params_list)
+
+    def fetchall(self):
+        return self.cursor.fetchall()
+        
+    def fetchone(self):
+        return self.cursor.fetchone()
+
+    def _convert_query(self, query):
+        # Convert standard '?' placeholders to MariaDB '%s'
+        query = query.replace('?', '%s')
+        # MariaDB supports GROUP_CONCAT natively.
+        return query
+
+
+class MariaDBAdapter(DatabaseAdapter):
+    def __init__(self, connection_string: str):
+        self.connection_string = connection_string
+        parsed = urllib.parse.urlparse(self.connection_string)
+        self.host = parsed.hostname
+        self.port = parsed.port or 3306
+        self.db_name = parsed.path.lstrip('/')
+        self.username = parsed.username
+        self.password = parsed.password
+
+    @contextlib.contextmanager
+    def get_connection(self):
+        import pymysql
+        import pymysql.cursors
+        conn = pymysql.connect(
+            host=self.host,
+            port=self.port,
+            user=self.username,
+            password=self.password,
+            database=self.db_name,
+            cursorclass=pymysql.cursors.DictCursor,
+            autocommit=True
+        )
+        try:
+            class ConnectionWrapper:
+                def __init__(self, c):
+                    self.c = c
+                def cursor(self):
+                    return MariaDBCursorWrapper(self.c.cursor())
+                def close(self):
+                    self.c.close()
+                def commit(self):
+                    self.c.commit()
+            yield ConnectionWrapper(conn)
+        finally:
+            conn.close()
+
+    def get_info(self) -> dict:
+        return {
+            "type": "MariaDB",
+            "host": self.host,
+            "path": "N/A",
+            "username": self.username,
+            "password": "***" if self.password else "None",
+            "db_name": self.db_name
+        }
+
+    def get_stats(self) -> dict:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) as c FROM PRED_info")
+            row = cursor.fetchone()
+            count = row['c'] if row else 0
+            
+            return {
+                "file_size_mb": round((count * 150) / (1024 * 1024), 2),
+                "total_rows": count
+            }
+
+    def get_indexes(self) -> list[dict]:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT table_name, index_name, non_unique, GROUP_CONCAT(column_name ORDER BY seq_in_index SEPARATOR ', ') as cols
+                FROM information_schema.statistics
+                WHERE table_schema = %s AND index_name != 'PRIMARY'
+                GROUP BY table_name, index_name, non_unique
+            """, [self.db_name])
+            indexes = cursor.fetchall()
+            
+            res = []
+            for row in indexes:
+                t = row.get('TABLE_NAME', row.get('table_name'))
+                idx = row.get('INDEX_NAME', row.get('index_name'))
+                cols = row.get('cols')
+                nu = row.get('NON_UNIQUE', row.get('non_unique'))
+                res.append({
+                    "name": idx,
+                    "sql": f"CREATE {'UNIQUE ' if nu == 0 else ''}INDEX {idx} ON {t}({cols});"
+                })
+            return res
+
+    def get_schema(self) -> list[dict]:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT table_name, column_name, column_type
+                FROM information_schema.columns
+                WHERE table_schema = %s
+                ORDER BY table_name, ordinal_position
+            """, [self.db_name])
+            columns = cursor.fetchall()
+            
+            tables = {}
+            for col in columns:
+                t = col.get('TABLE_NAME', col.get('table_name'))
+                if t not in tables:
+                    tables[t] = []
+                c_name = col.get('COLUMN_NAME', col.get('column_name'))
+                c_type = col.get('COLUMN_TYPE', col.get('column_type'))
+                tables[t].append(f"{c_name} {c_type}")
+            
+            return [
+                {
+                    "name": t_name, 
+                    "sql": f"CREATE TABLE {t_name} (\n  " + ",\n  ".join(cols) + "\n);"
+                }
+                for t_name, cols in tables.items()
+            ]

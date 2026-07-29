@@ -103,3 +103,27 @@ docker run -d --name pdweb-app --network pdweb-net \
 ```
 
 Navigate to `http://localhost:8000` to view your dashboard powered by PostgreSQL!
+
+
+
+### Dockerized MariaDB Deployment
+
+For a completely equivalent deployment using MariaDB, swap out the database container. The backend natively supports `mysql://` and `mariadb://` URLs via `PyMySQL`.
+
+1. **Start MariaDB container:**
+```bash
+docker build -t pdweb-mariadb -f Dockerfile.mariadb .
+docker run -d --name pdweb-mariadb --network pdweb-net \
+    -e MARIADB_USER=pdweb -e MARIADB_PASSWORD=pdweb -e MARIADB_DATABASE=pdweb \
+    -e MARIADB_ROOT_PASSWORD=root \
+    pdweb-mariadb
+```
+
+2. **Start pdweb app connected to MariaDB:**
+```bash
+docker build -t pdweb-app .
+docker run -d --name pdweb-app --network pdweb-net \
+    -e DATABASE_URL=mysql://pdweb:pdweb@pdweb-mariadb:3306/pdweb \
+    -p 8000:8000 \
+    pdweb-app
+```

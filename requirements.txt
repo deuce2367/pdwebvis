@@ -4,3 +4,4 @@ pydantic
 matplotlib
 fastapi-offline
 psycopg2-binary
+PyMySQL==1.1.0
