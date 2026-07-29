@@ -66,3 +66,40 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## Dockerized PostgreSQL Deployment
+
+pdwebvis natively supports PostgreSQL (with PostGIS) alongside SQLite. You can run the entire stack (both the database and the backend app) using Docker networks for a clean, isolated deployment.
+
+### 1. Create a Docker Network
+
+```bash
+docker network create pdweb-net
+```
+
+### 2. Start the PostgreSQL Container
+
+A lightweight `Dockerfile.db` is included to automatically initialize the PostgreSQL schema. Build and run it:
+
+```bash
+docker build -t pdweb-db -f Dockerfile.db .
+docker run -d --name pdweb-postgres --network pdweb-net \
+    -e POSTGRES_USER=pdweb \
+    -e POSTGRES_PASSWORD=pdweb \
+    -e POSTGRES_DB=pdweb \
+    pdweb-db
+```
+
+### 3. Start the pdweb Application Container
+
+Build the pdweb image and run it on the same network. By passing the `DATABASE_URL` environment variable pointing to the Postgres container, the app will automatically seed data and connect to it instead of using local SQLite.
+
+```bash
+docker build -t pdweb-app .
+docker run -d --name pdweb-app --network pdweb-net \
+    -e DATABASE_URL=postgresql://pdweb:pdweb@pdweb-postgres:5432/pdweb \
+    -p 8000:8000 \
+    pdweb-app
+```
+
+Navigate to `http://localhost:8000` to view your dashboard powered by PostgreSQL!

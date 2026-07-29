@@ -15,10 +15,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from db_adapter import SQLiteAdapter
+from db_adapter import SQLiteAdapter, PostgresAdapter
+import os
 
 DB_PATH = "test.db"
-db_adapter = SQLiteAdapter(DB_PATH)
+DATABASE_URL = os.environ.get('DATABASE_URL')
+
+if DATABASE_URL and (DATABASE_URL.startswith('postgres://') or DATABASE_URL.startswith('postgresql://')):
+    db_adapter = PostgresAdapter(DATABASE_URL)
+else:
+    db_adapter = SQLiteAdapter(DB_PATH)
 
 def get_db():
     return db_adapter.get_connection()

@@ -314,8 +314,8 @@ const TimelineBrush = ({ appliedRange, appliedMsics, appliedEvstrs, appliedAcqHo
         </div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', justifyContent: 'center', marginLeft: '0.2rem' }}>
-        <button onClick={onZoomIn} style={{ padding: '0.2rem', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '4px', cursor: 'pointer', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Zoom In"><ZoomIn size={16} /></button>
-        <button onClick={onZoomOut} style={{ padding: '0.2rem', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '4px', cursor: 'pointer', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Zoom Out"><ZoomOut size={16} /></button>
+        <button onClick={onZoomIn} style={{ padding: '0.3rem', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '4px', cursor: 'pointer', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Zoom In"><ZoomIn size={20} /></button>
+        <button onClick={onZoomOut} style={{ padding: '0.3rem', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '4px', cursor: 'pointer', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Zoom Out"><ZoomOut size={20} /></button>
       </div>
     </div>
   );
@@ -755,7 +755,7 @@ export default function App() {
       {activeTab === 'coverage' && (
         <div className="card full-width" style={{ height: '500px', display: 'flex', flexDirection: 'column' }}>
           <h2><Activity size={20} /> Coverage</h2>
-          <div className="ag-theme-alpine" style={{ width: '100%', flex: 1, marginTop: '1rem' }}>
+          <div className={theme === 'dark' ? "ag-theme-alpine-dark" : "ag-theme-alpine"} style={{ width: '100%', flex: 1, marginTop: '1rem' }}>
             <AgGridReact
               key={colormap}
               rowData={coverageData}

@@ -6,6 +6,7 @@ import time
 import os
 import datetime
 import json
+from db_adapter import SQLiteAdapter, PostgresAdapter
 
 def generate_random_json():
     num_pairs = random.randint(5, 20)
@@ -161,28 +162,34 @@ def generate_data(hours, interval):
 def main():
     parser = argparse.ArgumentParser(description="Generate synthetic data for PRED_info table.")
     parser.add_argument("--db", default="test.db", help="Path to SQLite database file.")
-    parser.add_argument("--schema", default="schema.sql", help="Path to schema file.")
+    parser.add_argument("--db-url", default=os.environ.get("DATABASE_URL"), help="Database URL (e.g. postgresql://...)")
+    parser.add_argument("--schema", default="schema.sql", help="Path to schema file (only used for SQLite).")
     parser.add_argument("--hours", type=float, default=168.0, help="Number of hours of data to generate (default 168).")
     default_interval = int(os.environ.get("PRED_SIZE", 5))
     parser.add_argument("--interval", type=int, default=default_interval, help=f"Interval in seconds for time steps (default {default_interval}).")
     args = parser.parse_args()
 
-    conn = sqlite3.connect(args.db)
-    
-    if os.path.exists(args.schema):
-        with open(args.schema, 'r') as f:
-            try:
-                conn.executescript(f.read())
-            except sqlite3.OperationalError as e:
-                if "already exists" not in str(e):
-                    print(f"Warning/Error when applying schema: {e}")
+    if args.db_url and (args.db_url.startswith('postgres://') or args.db_url.startswith('postgresql://')):
+        db_adapter = PostgresAdapter(args.db_url)
     else:
-        print(f"Schema file {args.schema} not found, assuming table exists.")
+        db_adapter = SQLiteAdapter(args.db)
+        # Apply schema for sqlite if missing
+        if os.path.exists(args.schema):
+            import sqlite3
+            conn = sqlite3.connect(args.db)
+            with open(args.schema, 'r') as f:
+                try:
+                    conn.executescript(f.read())
+                except sqlite3.OperationalError as e:
+                    pass
+            conn.close()
 
-    print(f"Generating data over {args.hours} hours with interval {args.interval}s...")
+    days = args.hours / 24
+    duration_str = f"{int(days)} days" if days >= 1 and days.is_integer() else f"{args.hours} hours"
+    print(f"Initializing database: Generating {duration_str} of synthetic records (interval: {args.interval}s)...")
     rows = generate_data(args.hours, args.interval)
 
-    print(f"Generated {len(rows)} rows. Inserting data into database...")
+    print(f"Generated {len(rows)} rows. Bulk inserting data into database...")
     insert_sql = """
         INSERT INTO PRED_info (
             evnt, unix_us, tc_ws, tc_fs, path, mgul, pkul, msic, mssn, nelem,
@@ -195,13 +202,13 @@ def main():
         )
     """
     
-    cursor = conn.cursor()
-    # Insert in chunks if it's too large, though sqlite handles large executemany reasonably well
-    cursor.executemany(insert_sql, rows)
-    conn.commit()
-    conn.close()
+    with db_adapter.get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.executemany(insert_sql, rows)
+        conn.commit()
     
-    print(f"Successfully inserted {len(rows)} rows into {args.db}.")
+    db_target = args.db_url if args.db_url else args.db
+    print(f"Successfully inserted {len(rows)} rows into {db_target}.")
 
 if __name__ == "__main__":
     main()

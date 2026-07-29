@@ -3,3 +3,4 @@ uvicorn
 pydantic
 matplotlib
 fastapi-offline
+psycopg2-binary
