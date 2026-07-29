@@ -79,10 +79,10 @@ docker network create pdweb-net
 
 ### 2. Start the PostgreSQL Container
 
-A lightweight `Dockerfile.db` is included to automatically initialize the PostgreSQL schema. Build and run it:
+A lightweight `Dockerfile.postgis` is included to automatically initialize the PostgreSQL schema. Build and run it:
 
 ```bash
-docker build -t pdweb-db -f Dockerfile.db .
+docker build -t pdweb-db -f Dockerfile.postgis .
 docker run -d --name pdweb-postgres --network pdweb-net \
     -e POSTGRES_USER=pdweb \
     -e POSTGRES_PASSWORD=pdweb \
