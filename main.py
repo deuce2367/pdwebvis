@@ -20,6 +20,8 @@ import os
 
 DB_PATH = "test.db"
 DATABASE_URL = os.environ.get('DATABASE_URL')
+DB_SCHEMA = os.environ.get('DB_SCHEMA', '')
+TBL = f"{DB_SCHEMA}.{TBL}" if DB_SCHEMA else "PRED_info"
 
 if DATABASE_URL and (DATABASE_URL.startswith('postgres://') or DATABASE_URL.startswith('postgresql://')):
     db_adapter = PostgresAdapter(DATABASE_URL)
@@ -46,7 +48,7 @@ def format_msic(msic: str | int) -> str:
         return f"{s[:4]}/{s[4:]}"
     return s
 
-def build_time_filter(start_unix: float | None, end_unix: float | None, msics: list[str] | None = None, evstrs: list[str] | None = None, acq_hosts: list[str] | None = None):
+def build_time_filter(start_unix: float | None, end_unix: float | None, msics: list[str] | None = None, evstrs: list[str] | None = None, acq_hosts: list[str] | None = None, mssns: list[str] | None = None):
     filters = []
     params = []
     if start_unix is not None:
@@ -68,6 +70,10 @@ def build_time_filter(start_unix: float | None, end_unix: float | None, msics: l
         placeholders = ", ".join("?" * len(acq_hosts))
         filters.append(f"acq_host IN ({placeholders})")
         params.extend(acq_hosts)
+    if mssns:
+        placeholders = ", ".join("?" * len(mssns))
+        filters.append(f"mssn IN ({placeholders})")
+        params.extend(mssns)
     where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
     return where_clause, params
 
@@ -75,24 +81,25 @@ def build_time_filter(start_unix: float | None, end_unix: float | None, msics: l
 def get_data(
     start_unix: float = Query(None, description="Start time in microseconds"),
     end_unix: float = Query(None, description="End time in microseconds"),
-    msics: list[str] = Query(None, description="List of MSIC values to filter"),
-    evstrs: list[str] = Query(None, description="List of evstr values to filter"),
-    acq_hosts: list[str] = Query(None, description="List of acq_host values to filter"),
+    msics: list[str] = Query(None),
+    evstrs: list[str] = Query(None),
+    acq_hosts: list[str] = Query(None),
+    mssns: list[str] = Query(None),
     limit: int = Query(100, ge=1, le=10000),
     offset: int = Query(0, ge=0)
 ):
-    where_clause, params = build_time_filter(start_unix, end_unix, msics, evstrs, acq_hosts)
+    where_clause, params = build_time_filter(start_unix, end_unix, msics, evstrs, acq_hosts, mssns)
     
     with get_db() as conn:
         cursor = conn.cursor()
         
         # Get total count
-        count_query = f"SELECT COUNT(*) as count FROM PRED_info {where_clause}"
+        count_query = f"SELECT COUNT(*) as count FROM {TBL} {where_clause}"
         cursor.execute(count_query, params)
         total = cursor.fetchone()["count"]
         
         # Get data
-        data_query = f"SELECT * FROM PRED_info {where_clause} ORDER BY unix_us ASC LIMIT ? OFFSET ?"
+        data_query = f"SELECT * FROM {TBL} {where_clause} ORDER BY unix_us ASC LIMIT ? OFFSET ?"
         cursor.execute(data_query, params + [limit, offset])
         rows = [dict(row) for row in cursor.fetchall()]
         
@@ -120,31 +127,51 @@ def get_histogram(
     msics: list[str] = Query(None),
     evstrs: list[str] = Query(None),
     acq_hosts: list[str] = Query(None),
+    mssns: list[str] = Query(None),
     theme: str = Query("light"),
     colormap: str = Query("IN1")
 ):
-    where_clause, params = build_time_filter(start_unix, end_unix, msics, evstrs, acq_hosts)
+    where_clause, params = build_time_filter(start_unix, end_unix, msics, evstrs, acq_hosts, mssns)
     
     if col not in ["date8", "msic", "evstr", "hour", "acq_host"]:
         raise HTTPException(status_code=400, detail="Invalid column")
         
     query = ""
     if col == "hour":
-        query = f"SELECT substr(time8, 1, 2) as bin, COUNT(*) as count FROM PRED_info {where_clause} GROUP BY substr(time8, 1, 2) ORDER BY bin"
+        query = f"SELECT substr(time8, 1, 2) as bin, COUNT(*) as count FROM {TBL} {where_clause} GROUP BY substr(time8, 1, 2) ORDER BY bin"
     else:
-        query = f"SELECT {col} as bin, COUNT(*) as count FROM PRED_info {where_clause} GROUP BY {col} ORDER BY bin"
+        query = f"SELECT {col} as bin, COUNT(*) as count FROM {TBL} {where_clause} GROUP BY {col} ORDER BY bin"
 
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute(query, params)
         rows = cursor.fetchall()
-
-    bins = [str(r["bin"]) for r in rows]
-    counts = [r["count"] for r in rows]
+        
+    if col == "hour":
+        # Ensure 00-23
+        hour_dict = {f"{h:02d}": 0 for h in range(24)}
+        for r in rows:
+            hour_dict[str(r["bin"])] = r["count"]
+        bins = list(hour_dict.keys())
+        counts = list(hour_dict.values())
+    else:
+        bins = [str(r["bin"]) for r in rows]
+        counts = [r["count"] for r in rows]
 
     bg_color = '#1e293b' if theme == 'dark' else '#ffffff'
     text_color = '#f8fafc' if theme == 'dark' else '#334155'
     spine_color = '#334155' if theme == 'dark' else '#cbd5e1'
+
+    import matplotlib.colors as mcolors
+    try:
+        cmap_obj = plt.get_cmap(colormap)
+    except ValueError:
+        cmap_obj = plt.get_cmap("viridis")
+        
+    if hasattr(cmap_obj, 'colors'):
+        primary_color = mcolors.to_hex(cmap_obj.colors[0])
+    else:
+        primary_color = mcolors.to_hex(cmap_obj(0.0)) # primary accent color
     
     import numpy as np
     try:
@@ -157,9 +184,13 @@ def get_histogram(
         colors = [cmap_obj(i % len(cmap_obj.colors)) for i in range(num_items)]
     else:
         colors = [cmap_obj(i / max(1, num_items - 1)) for i in range(num_items)]
+        
+    # Single color logic
+    if col in ["evstr", "hour", "date8"]:
+        colors = [primary_color] * len(counts)
 
     if col in ["msic", "acq_host"]:
-        fig, ax = plt.subplots(figsize=(10, 6))
+        fig, ax = plt.subplots(figsize=(12, 8))
         fig.patch.set_facecolor(bg_color)
         ax.set_facecolor(bg_color)
         
@@ -176,7 +207,7 @@ def get_histogram(
                 autopct='%1.1f%%', 
                 pctdistance=0.75,
                 colors=colors,
-                textprops={'color': text_color, 'fontsize': 9},
+                textprops={'color': text_color, 'fontsize': 16, 'weight': 'bold'},
                 wedgeprops={'width': 0.4, 'edgecolor': bg_color},
                 radius=1.2
             )
@@ -188,16 +219,18 @@ def get_histogram(
                 autotext.set_path_effects([path_effects.withStroke(linewidth=1, foreground='#333333')])
             
             legend_labels = [f"{l} ({c:,})" for l, c in zip(labels, counts)]
-            legend = ax.legend(wedges, legend_labels, loc="center left", bbox_to_anchor=(1, 0.5), frameon=False, labelcolor=text_color)
+            legend = ax.legend(wedges, legend_labels, loc="center left", bbox_to_anchor=(1, 0.5), frameon=False, labelcolor=text_color, fontsize=14)
         
         # Adjust layout to fit legend and reduce padding
-        fig.subplots_adjust(left=0, right=0.65, top=1, bottom=0)
+        fig.subplots_adjust(left=0, right=0.7, top=1, bottom=0)
         
     else:
         if col == "evstr":
             fig, ax = plt.subplots(figsize=(30, 6))
+        elif col == "hour":
+            fig, ax = plt.subplots(figsize=(20, 6))
         else:
-            fig, ax = plt.subplots(figsize=(15, 6))
+            fig, ax = plt.subplots(figsize=(10, 6))
             
         fig.patch.set_facecolor(bg_color)
         ax.set_facecolor(bg_color)
@@ -237,19 +270,26 @@ def get_gantt(
     msics: list[str] = Query(None),
     evstrs: list[str] = Query(None),
     acq_hosts: list[str] = Query(None),
+    mssns: list[str] = Query(None),
     buckets: int = Query(360),
     theme: str = Query("light"),
     colormap: str = Query("IN1")
 ):
-    where_clause, params = build_time_filter(start_unix, end_unix, msics, evstrs, acq_hosts)
+    where_clause, params = build_time_filter(start_unix, end_unix, msics, evstrs, acq_hosts, mssns)
     
     with get_db() as conn:
         cursor = conn.cursor()
         
-        cursor.execute(f"SELECT MIN(unix_us) as min_unix, MAX(unix_us) as max_unix FROM PRED_info {where_clause}", params)
+        cursor.execute(f"SELECT MIN(unix_us) as min_unix, MAX(unix_us) as max_unix FROM {TBL} {where_clause}", params)
         row = cursor.fetchone()
         min_unix = row["min_unix"]
         max_unix = row["max_unix"]
+        
+        # Override with exact requested limits if provided
+        if start_unix is not None:
+            min_unix = start_unix
+        if end_unix is not None:
+            max_unix = end_unix
         
         if not min_unix or not max_unix:
             fig, ax = plt.subplots(figsize=(15, 4))
@@ -270,7 +310,7 @@ def get_gantt(
                 msic,
                 CAST((unix_us - ?) / ? AS INTEGER) as bucket,
                 COUNT(*) as count
-            FROM PRED_info
+            FROM {TBL}
             {where_clause}
             GROUP BY msic, bucket
         """
@@ -372,24 +412,28 @@ def get_filters(
     end_unix: float = Query(None),
     msics: list[str] = Query(None),
     evstrs: list[str] = Query(None),
-    acq_hosts: list[str] = Query(None)
+    acq_hosts: list[str] = Query(None),
+    mssns: list[str] = Query(None)
 ):
-    where_clause, params = build_time_filter(start_unix, end_unix, msics, evstrs, acq_hosts)
+    where_clause, params = build_time_filter(start_unix, end_unix, msics, evstrs, acq_hosts, mssns)
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute(f"SELECT MIN(unix_us) as min_unix, MAX(unix_us) as max_unix FROM PRED_info {where_clause}", params)
+        cursor.execute(f"SELECT MIN(unix_us) as min_unix, MAX(unix_us) as max_unix FROM {TBL} {where_clause}", params)
         row = cursor.fetchone()
         
-        cursor.execute(f"SELECT DISTINCT msic FROM PRED_info {where_clause} ORDER BY msic", params)
+        cursor.execute(f"SELECT DISTINCT msic FROM {TBL} {where_clause} ORDER BY msic", params)
         msics_list = [format_msic(r["msic"]) for r in cursor.fetchall()]
         
-        cursor.execute(f"SELECT DISTINCT evstr FROM PRED_info {where_clause} ORDER BY evstr", params)
+        cursor.execute(f"SELECT DISTINCT mssn FROM {TBL} {where_clause} ORDER BY mssn", params)
+        mssns_list = [str(r["mssn"]) for r in cursor.fetchall()]
+        
+        cursor.execute(f"SELECT DISTINCT evstr FROM {TBL} {where_clause} ORDER BY evstr", params)
         evstrs_list = [str(r["evstr"]) for r in cursor.fetchall()]
         
-        cursor.execute(f"SELECT DISTINCT acq_host FROM PRED_info {where_clause} ORDER BY acq_host", params)
+        cursor.execute(f"SELECT DISTINCT acq_host FROM {TBL} {where_clause} ORDER BY acq_host", params)
         acq_hosts_list = [str(r["acq_host"]) for r in cursor.fetchall()]
         
-        return {"min_unix": row["min_unix"], "max_unix": row["max_unix"], "msics": msics_list, "evstrs": evstrs_list, "acq_hosts": acq_hosts_list}
+        return {"min_unix": row["min_unix"], "max_unix": row["max_unix"], "msics": msics_list, "mssns": mssns_list, "evstrs": evstrs_list, "acq_hosts": acq_hosts_list}
 
 @app.get("/api/stats/coverage_table", summary="Coverage Table", description="Generates aggregated coverage table.")
 def get_coverage_table(
@@ -397,9 +441,10 @@ def get_coverage_table(
     end_unix: float = Query(None, description="End Unix timestamp (us)"),
     msics: list[str] = Query(None, description="List of MSIC filters"),
     evstrs: list[str] = Query(None, description="List of EVSTR filters"),
-    acq_hosts: list[str] = Query(None, description="List of ACQ_HOST filters")
+    acq_hosts: list[str] = Query(None, description="List of ACQ_HOST filters"),
+    mssns: list[str] = Query(None, description="List of MSSN filters")
 ):
-    where_clause, params = build_time_filter(start_unix, end_unix, msics, evstrs, acq_hosts)
+    where_clause, params = build_time_filter(start_unix, end_unix, msics, evstrs, acq_hosts, mssns)
     
     with get_db() as conn:
         cursor = conn.cursor()
@@ -414,7 +459,7 @@ def get_coverage_table(
                     MAX(nelem / (rx_srate * 1000000.0)) as period_duration
                 FROM (
                     SELECT date8, time8, msic, nelem, rx_srate
-                    FROM PRED_info
+                    FROM {TBL}
                     {where_clause}
                     ORDER BY date8, time8, msic
                 ) AS subq
@@ -449,17 +494,24 @@ def get_timeline(
     msics: list[str] = Query(None),
     evstrs: list[str] = Query(None),
     acq_hosts: list[str] = Query(None),
+    mssns: list[str] = Query(None),
     buckets: int = Query(20)
 ):
-    where_clause, params = build_time_filter(start_unix, end_unix, msics, evstrs, acq_hosts)
+    where_clause, params = build_time_filter(start_unix, end_unix, msics, evstrs, acq_hosts, mssns)
         
     with get_db() as conn:
         cursor = conn.cursor()
         
-        cursor.execute(f"SELECT MIN(unix_us) as min_unix, MAX(unix_us) as max_unix FROM PRED_info {where_clause}", params)
+        cursor.execute(f"SELECT MIN(unix_us) as min_unix, MAX(unix_us) as max_unix FROM {TBL} {where_clause}", params)
         row = cursor.fetchone()
         min_unix = row["min_unix"]
         max_unix = row["max_unix"]
+        
+        # Override with exact requested limits if provided
+        if start_unix is not None:
+            min_unix = start_unix
+        if end_unix is not None:
+            max_unix = end_unix
         
         if not min_unix or not max_unix:
             return {"min_unix": 0, "max_unix": 0, "bucket_size": 1, "data": []}
@@ -472,7 +524,7 @@ def get_timeline(
             SELECT 
                 CAST((unix_us - ?) / ? AS INTEGER) as bucket,
                 COUNT(*) as count
-            FROM PRED_info
+            FROM {TBL}
             {where_clause}
             GROUP BY bucket
             ORDER BY bucket
@@ -491,6 +543,114 @@ def get_timeline(
         return {"min_unix": min_unix, "max_unix": max_unix, "bucket_size": bucket_size, "data": result_data}
 
 
+
+
+@app.get("/api/stats/receivers_nested_pie", summary="Nested Donut", description="Outer MSSN, Inner MSIC")
+def get_receivers_pie(
+    start_unix: float = Query(None),
+    end_unix: float = Query(None),
+    msics: list[str] = Query(None),
+    evstrs: list[str] = Query(None),
+    acq_hosts: list[str] = Query(None),
+    mssns: list[str] = Query(None),
+    theme: str = Query("light"),
+    colormap: str = Query("IN1")
+):
+    where_clause, params = build_time_filter(start_unix, end_unix, msics, evstrs, acq_hosts, mssns)
+    
+    # Query MSIC counts, extract MSSN
+    query = f"SELECT msic, COUNT(*) as c FROM {TBL} {where_clause} GROUP BY msic"
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        
+    msic_counts = {}
+    mssn_counts = {}
+    
+    for r in rows:
+        m = str(r["msic"])
+        c = r["c"]
+        msic_counts[m] = c
+        mssn = m[:4] if len(m) >= 4 else m
+        mssn_counts[mssn] = mssn_counts.get(mssn, 0) + c
+        
+    if not msic_counts:
+        fig, ax = plt.subplots(figsize=(6, 6))
+        buf = io.BytesIO()
+        fig.savefig(buf, format='svg', transparent=True)
+        buf.seek(0)
+        plt.close(fig)
+        return Response(content=buf.read(), media_type="image/svg+xml")
+
+    # Prepare nested data
+    mssn_labels = list(mssn_counts.keys())
+    mssn_vals = list(mssn_counts.values())
+    
+    msic_labels = []
+    msic_vals = []
+
+    import numpy as np
+    import matplotlib.colors as mcolors
+    try:
+        cmap_obj = plt.get_cmap(colormap)
+    except ValueError:
+        cmap_obj = plt.get_cmap("viridis")
+        
+    num_items = max(1, len(mssn_labels))
+    if hasattr(cmap_obj, 'colors'):
+        cmap_list = [mcolors.to_hex(c) for c in cmap_obj.colors]
+    else:
+        cmap_list = [mcolors.to_hex(cmap_obj(i / max(1, num_items - 1))) for i in range(num_items)]
+
+    outer_colors = []
+    inner_colors = []
+
+    for i, mssn in enumerate(mssn_labels):
+        outer_colors.append(cmap_list[i % len(cmap_list)])
+        # get all msics for this mssn
+        sub_msics = [(m, c) for m, c in msic_counts.items() if m.startswith(mssn) or (len(m) < 4 and m == mssn)]
+        # sort by count
+        sub_msics.sort(key=lambda x: x[1], reverse=True)
+        
+        for j, (m, c) in enumerate(sub_msics):
+            m_str = str(m)
+            # Only show last 2 digits if available
+            label = m_str[-2:] if len(m_str) >= 2 else m_str
+            msic_labels.append(label)
+            msic_vals.append(c)
+            # Make inner color a lighter/darker version of outer, or just use same colormap with alpha
+            inner_colors.append(cmap_list[i % len(cmap_list)])
+
+    fig, ax = plt.subplots(figsize=(8, 8))
+    fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
+    
+    bg_color = '#1e293b' if theme == 'dark' else '#ffffff'
+    text_color = '#f8fafc' if theme == 'dark' else '#334155'
+    fig.patch.set_facecolor(bg_color)
+    ax.set_facecolor(bg_color)
+
+    size = 0.3
+    
+    # Outer ring
+    ax.pie(mssn_vals, radius=1.3, colors=outer_colors,
+           wedgeprops=dict(width=size, edgecolor=bg_color),
+           labels=[f"MSSN {l}" for l in mssn_labels], textprops={'color': text_color, 'weight': 'bold', 'fontsize': 14})
+           
+    # Inner ring
+    # We use a slightly modified color array for inner by reducing alpha or just using same colors but distinct edges
+    inner_wedgeprops = dict(width=size, edgecolor=bg_color, alpha=0.7)
+    ax.pie(msic_vals, radius=1.3-size, colors=inner_colors,
+           wedgeprops=inner_wedgeprops,
+           labels=msic_labels, labeldistance=0.75, textprops={'color': text_color, 'fontsize': 12, 'weight': 'bold'})
+           
+    ax.set(aspect="equal")
+    
+    buf = io.BytesIO()
+    fig.savefig(buf, format='svg', bbox_inches='tight', transparent=True)
+    buf.seek(0)
+    plt.close(fig)
+    return Response(content=buf.read(), media_type="image/svg+xml")
 
 # Mount static frontend if exists
 if os.path.exists("frontend/dist"):

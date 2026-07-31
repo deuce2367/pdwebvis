@@ -27,10 +27,13 @@ def generate_random_string(length):
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
 
 def generate_data(hours, interval):
-    # mssn pool: typically 3 to 12 distinct values, between 2000 and 4999
-    num_mssn = random.randint(3, 12)
-    mssn_pool = random.sample(range(2000, 5000), num_mssn)
-    msic_map = {mssn: mssn * 100 + random.randint(0, 99) for mssn in mssn_pool}
+    # mssn pool: typically 4 to 8 distinct values, between 2000 and 4999
+    num_global_mssn = random.randint(4, 8)
+    global_mssn_pool = random.sample(range(2000, 5000), num_global_mssn)
+    
+    # suffix pool: 10 to 20 distinct values
+    num_global_suffix = random.randint(10, 20)
+    global_suffix_pool = random.sample(range(0, 100), num_global_suffix)
     
     num_acq_hosts = random.randint(2, 6)
     acq_hosts = [f"acqhost{n:02d}" for n in random.sample(range(1, 100), num_acq_hosts)]
@@ -39,123 +42,99 @@ def generate_data(hours, interval):
     start_time = end_time - datetime.timedelta(hours=hours)
     
     epoch_1950 = datetime.datetime(1950, 1, 1, tzinfo=datetime.timezone.utc)
+
     
     num_days = int(hours / 24)
     if num_days == 0:
         num_days = 1
         
-    days_profile = []
-    for week_start in range(0, num_days, 7):
-        week_days = list(range(week_start, min(week_start + 7, num_days)))
-        if len(week_days) >= 3:
-            no_data = random.choice(week_days)
-            week_days.remove(no_data)
-            high_data = random.choice(week_days)
-            week_days.remove(high_data)
-            low_data = random.choice(week_days)
-            week_days.remove(low_data)
-            special = {no_data: 'none', high_data: 'high', low_data: 'low'}
-        else:
-            special = {}
-        for d in week_days:
-            special[d] = 'normal'
-        for d in range(week_start, min(week_start + 7, num_days)):
-            days_profile.append(special.get(d, 'normal'))
-            
     data = []
-    for d in range(num_days):
-        mode = days_profile[d]
-        if mode == 'none':
+    total_hours = int(hours)
+    
+    current_time = start_time
+    
+    current_day_date = None
+    daily_mssn_pool = []
+    msic_map = {}
+    
+    for h in range(total_hours):
+        hour_of_day = current_time.hour
+        day_date = current_time.date()
+        
+        # New Day logic: 3 to 8 MSSN values drawn from global pool
+        if day_date != current_day_date:
+            current_day_date = day_date
+            num_mssn_today = random.randint(3, min(8, len(global_mssn_pool)))
+            daily_mssn_pool = random.sample(global_mssn_pool, num_mssn_today)
+            
+            # MSIC values should use one of those MSSNs for first 4 digits and 2 digit suffix from global_suffix_pool
+            msic_map = {mssn: mssn * 100 + random.choice(global_suffix_pool) for mssn in daily_mssn_pool}
+        
+        # Day/Night cycle probabilities
+        if hour_of_day >= 23 or hour_of_day <= 7:
+            # Busy period (80% chance of data)
+            is_active = random.random() < 0.8
+        else:
+            # Quiet period (10% chance of data)
+            is_active = random.random() < 0.1
+            
+        if not is_active:
+            current_time += datetime.timedelta(hours=1)
             continue
             
-        day_start = start_time + datetime.timedelta(days=d)
+        # If active, generate a contiguous run in this hour (5 to 15 mins)
+        run_duration_sec = random.randint(5 * 60, 15 * 60)
+        num_active_mssn = random.randint(1, min(4, len(daily_mssn_pool)))
+        active_mssns = random.sample(daily_mssn_pool, num_active_mssn)
+        # Lock the MSIC mappings for this extent
+        run_msic_map = {mssn: msic_map[mssn] for mssn in active_mssns}
         
-        if mode == 'high':
-            active_hours = random.uniform(6.0, 8.0)
-        elif mode == 'low':
-            active_hours = random.uniform(1.0, 2.0)
-        else:
-            active_hours = random.uniform(3.0, 6.0)
-            
-        max_start_offset = 24.0 - active_hours
-        start_offset = random.uniform(0, max_start_offset)
+        # Start somewhere in the first half of the hour
+        start_offset_sec = random.randint(0, 30 * 60)
+        run_start = current_time + datetime.timedelta(seconds=start_offset_sec)
         
-        current_time = day_start + datetime.timedelta(hours=start_offset)
-        active_end_time = current_time + datetime.timedelta(hours=active_hours)
+        # Align to interval
+        remainder = run_start.timestamp() % interval
+        if remainder > 0:
+            run_start -= datetime.timedelta(seconds=remainder)
+            
+        run_end = min(run_start + datetime.timedelta(seconds=run_duration_sec), current_time + datetime.timedelta(hours=1))
         
-        while current_time < active_end_time:
-            # Run duration: 5 to 15 minutes
-            run_duration_sec = random.randint(5 * 60, 15 * 60)
+        t = run_start
+        while t <= run_end:
+            for mssn in active_mssns:
+                if random.random() < 0.01:
+                    continue
             
-            # 1 to 4 active mssns during this run
-            num_active_mssn = random.randint(1, min(4, num_mssn))
-            active_mssns = random.sample(mssn_pool, num_active_mssn)
-            
-            # Align current_time to interval so time8 lands on multiples of interval
-            remainder = current_time.timestamp() % interval
-            if remainder > 0:
-                current_time -= datetime.timedelta(seconds=remainder)
-
-            run_end_time = min(current_time + datetime.timedelta(seconds=run_duration_sec), active_end_time)
-            
-            t = current_time
-            while t <= run_end_time:
-                for mssn in active_mssns:
-                    if random.random() < 0.01:
-                        continue
+                unix_us = int(t.timestamp() * 1_000_000)
+                tc_ws = (t - epoch_1950).total_seconds()
+                tc_fs = 0.0 
                 
-                    # Derive time-based values
-                    unix_us = int(t.timestamp() * 1_000_000)
-                    tc_ws = (t - epoch_1950).total_seconds()
-                    tc_fs = 0.0 # natural second intervals
-                    
-                    evstr = f"{t.year % 100:02d}{t.month:02d}{t.day:02d}{t.hour:02d}{t.minute // 10}"
-                    evnt = int(evstr)
-                    
-                    date8 = f"{t.year:04d}{t.month:02d}{t.day:02d}"
-                    time8 = f"{t.hour:02d}{t.minute:02d}{t.second:02d}"
-                    
-                    msic = msic_map[mssn]
-                    rx_srate_val = 20.0
-                    nelem_val = int(rx_srate_val * 1e6 * 5.0) + random.randint(-8192, 8192)
-                    
-                    row = (
-                        evnt,
-                        unix_us,
-                        tc_ws,
-                        tc_fs,
-                        f'/data/pd/{evnt}/{mssn}/{time8}', # path
-                        'pdfile.prm', # mgul
-                        'pkfile.prm', # pkul
-                        msic, # msic
-                        mssn, # mssn
-                        nelem_val, # nelem
-                        2145.0, # rx_mhz
-                        10.0, # rx_bw
-                        rx_srate_val, # rx_srate
-                        0.0, # if_mhz
-                        random.uniform(10000.0, 99999.0), # pdel_nb
-                        random.uniform(1e-8, 9e-8), # pdel_wb
-                        0.0, # pdel_dif
-                        0.0, # avg_xdel
-                        'CI', # fmt2
-                        generate_random_string(4), # rx_band
-                        generate_random_string(4), # rx_dpath
-                        '021450', # freq8
-                        evstr, # evstr
-                        date8, # date8
-                        time8, # time8
-                        random.choice(acq_hosts), # acq_host
-                        generate_random_json(), # tag_gen
-                        generate_random_json() # tag_acq
-                    )
-                    data.append(row)
+                evstr = f"{t.year % 100:02d}{t.month:02d}{t.day:02d}{t.hour:02d}{t.minute // 10}"
+                evnt = int(evstr)
                 
-                t += datetime.timedelta(seconds=interval)
+                date8 = f"{t.year:04d}{t.month:02d}{t.day:02d}"
+                time8 = f"{t.hour:02d}{t.minute:02d}{t.second:02d}"
+                
+                msic = run_msic_map[mssn]
+                rx_srate_val = 20.0
+                nelem_val = int(rx_srate_val * 1e6 * 5.0) + random.randint(-8192, 8192)
+                
+                row = (
+                    evnt, unix_us, tc_ws, tc_fs,
+                    f'/data/pd/{evnt}/{mssn}/{time8}', 'pdfile.prm', 'pkfile.prm',
+                    msic, mssn, nelem_val,
+                    2145.0, 10.0, rx_srate_val, 0.0,
+                    random.uniform(10000.0, 99999.0), random.uniform(1e-8, 9e-8), 0.0, 0.0,
+                    'CI', generate_random_string(4), generate_random_string(4), '021450',
+                    evstr, date8, time8, random.choice(acq_hosts),
+                    generate_random_json(), generate_random_json()
+                )
+                data.append(row)
             
-            # Gap between runs during active window (20-40 mins)
-            gap_sec = random.randint(20 * 60, 40 * 60)
-            current_time = run_end_time + datetime.timedelta(seconds=gap_sec)
+            t += datetime.timedelta(seconds=interval)
+            
+        current_time += datetime.timedelta(hours=1)
         
     return data
 
@@ -191,9 +170,15 @@ def main():
     print(f"Initializing database: Generating {duration_str} of synthetic records (interval: {args.interval}s)...")
     rows = generate_data(args.hours, args.interval)
 
-    print(f"Generated {len(rows)} rows. Bulk inserting data into database...")
-    insert_sql = """
-        INSERT INTO PRED_info (
+
+    # Prefix PRED_info if DB_SCHEMA is provided
+    db_schema = os.environ.get("DB_SCHEMA", "")
+    tbl_prefix = f"{db_schema}." if db_schema else ""
+    table_name = f"{tbl_prefix}PRED_info"
+
+    print(f"Generated {len(rows)} rows. Bulk inserting data into {table_name}...")
+    insert_sql = f"""
+        INSERT INTO {table_name} (
             evnt, unix_us, tc_ws, tc_fs, path, mgul, pkul, msic, mssn, nelem,
             rx_mhz, rx_bw, rx_srate, if_mhz, pdel_nb, pdel_wb, pdel_dif, avg_xdel,
             fmt2, rx_band, rx_dpath, freq8, evstr, date8, time8, acq_host, tag_gen, tag_acq
@@ -203,6 +188,7 @@ def main():
             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )
     """
+
     
     with db_adapter.get_connection() as conn:
         cursor = conn.cursor()

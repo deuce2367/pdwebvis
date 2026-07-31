@@ -127,3 +127,12 @@ docker run -d --name pdweb-app --network pdweb-net \
     -p 8000:8000 \
     pdweb-app
 ```
+
+
+## Environment Variables
+
+- `DATABASE_URL`: Database connection string (e.g. `postgresql://...` or `mysql://...`). If omitted, SQLite is used.
+- `GENERATE_DATA`: Set to `"true"` to automatically generate synthetic data on container startup. Default is `"false"`.
+- `DATA_HOURS`: When generating data, the number of hours of data to synthesize (default: 168).
+- `PRED_SIZE`: The interval in seconds for data generation rows (default: 5).
+- `DB_SCHEMA`: An optional schema or namespace prefix for the `PRED_info` table (e.g. `myschema`). When set, the system will query `myschema.PRED_info`.

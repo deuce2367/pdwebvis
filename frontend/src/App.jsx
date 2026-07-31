@@ -103,7 +103,7 @@ const parseDt = (str) => {
 
 const TIMELINE_BUCKETS = 32;
 
-const TimelineBrush = ({ appliedRange, appliedMsics, appliedEvstrs, appliedAcqHosts, stagedRange, onRangeChange, isRelativeMode, setIsRelativeMode, relativeValue, setRelativeValue, relativeUnit, setRelativeUnit, onZoomIn, onZoomOut }) => {
+const TimelineBrush = ({ appliedRange, appliedMsics, appliedMssns, appliedEvstrs, appliedAcqHosts, fetchTrigger, stagedRange, onRangeChange, isRelativeMode, setIsRelativeMode, relativeValue, setRelativeValue, relativeUnit, setRelativeUnit, onZoomIn, onZoomOut }) => {
   const [data, setData] = useState(new Array(TIMELINE_BUCKETS).fill(0));
   const [meta, setMeta] = useState(null);
   
@@ -119,6 +119,22 @@ const TimelineBrush = ({ appliedRange, appliedMsics, appliedEvstrs, appliedAcqHo
       const params = new URLSearchParams();
       if (appliedRange.start) params.append('start_unix', appliedRange.start);
       if (appliedRange.end) params.append('end_unix', appliedRange.end);
+      if (appliedMsics !== null) {
+        if (appliedMsics.length === 0) params.append('msics', '__NONE__');
+        else appliedMsics.forEach(m => params.append('msics', m));
+      }
+      if (appliedMssns !== null) {
+        if (appliedMssns.length === 0) params.append('mssns', '__NONE__');
+        else appliedMssns.forEach(m => params.append('mssns', m));
+      }
+      if (appliedEvstrs !== null) {
+        if (appliedEvstrs.length === 0) params.append('evstrs', '__NONE__');
+        else appliedEvstrs.forEach(e => params.append('evstrs', e));
+      }
+      if (appliedAcqHosts !== null) {
+        if (appliedAcqHosts.length === 0) params.append('acq_hosts', '__NONE__');
+        else appliedAcqHosts.forEach(h => params.append('acq_hosts', h));
+      }
       params.append('buckets', TIMELINE_BUCKETS);
       
       try {
@@ -142,7 +158,7 @@ const TimelineBrush = ({ appliedRange, appliedMsics, appliedEvstrs, appliedAcqHo
       }
     };
     fetchTimeline();
-  }, [appliedRange, appliedMsics, appliedEvstrs, appliedAcqHosts]);
+  }, [appliedRange, appliedMsics, appliedMssns, appliedEvstrs, appliedAcqHosts, fetchTrigger]);
 
   // Sync inputs when stagedRange changes externally
   useEffect(() => {
@@ -339,6 +355,8 @@ export default function App() {
   const [coverageData, setCoverageData] = useState([]);
   const [colormap, setColormap] = useState('IN1');
   const [showPalette, setShowPalette] = useState(false);
+  const [isFetching, setIsFetching] = useState(false);
+  const [fetchTrigger, setFetchTrigger] = useState(0);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -347,17 +365,20 @@ export default function App() {
   // Staged Filters (UI state)
   const [stagedRange, setStagedRange] = useState({ start: null, end: null });
   const [stagedMsics, setStagedMsics] = useState(null);
+  const [stagedMssns, setStagedMssns] = useState(null);
   const [stagedEvstrs, setStagedEvstrs] = useState(null);
   const [stagedAcqHosts, setStagedAcqHosts] = useState(null);
 
   // Applied Filters (API state)
   const [appliedRange, setAppliedRange] = useState({ start: null, end: null });
   const [appliedMsics, setAppliedMsics] = useState(null);
+  const [appliedMssns, setAppliedMssns] = useState(null);
   const [appliedEvstrs, setAppliedEvstrs] = useState(null);
   const [appliedAcqHosts, setAppliedAcqHosts] = useState(null);
   
   // Available filter options
   const [availableMsics, setAvailableMsics] = useState([]);
+  const [availableMssns, setAvailableMssns] = useState([]);
   const [availableEvstrs, setAvailableEvstrs] = useState([]);
   const [availableAcqHosts, setAvailableAcqHosts] = useState([]);
   
@@ -392,6 +413,7 @@ export default function App() {
       const res = await fetch('/api/stats/filters?' + params.toString());
       const json = await res.json();
       if (json.msics) setAvailableMsics(json.msics);
+      if (json.mssns) setAvailableMssns(json.mssns);
       if (json.evstrs) setAvailableEvstrs(json.evstrs);
       if (json.acq_hosts) setAvailableAcqHosts(json.acq_hosts);
       
@@ -442,6 +464,10 @@ export default function App() {
       if (appliedMsics.length === 0) params.append('msics', '__NONE__');
       else appliedMsics.forEach(m => params.append('msics', m));
     }
+    if (appliedMssns !== null) {
+      if (appliedMssns.length === 0) params.append('mssns', '__NONE__');
+      else appliedMssns.forEach(m => params.append('mssns', m));
+    }
     if (appliedEvstrs !== null) {
       if (appliedEvstrs.length === 0) params.append('evstrs', '__NONE__');
       else appliedEvstrs.forEach(e => params.append('evstrs', e));
@@ -452,6 +478,7 @@ export default function App() {
     }
 
     try {
+      setIsFetching(true);
       const res = await fetch(`/api/data?${params.toString()}`);
       const json = await res.json();
       setData(json.data);
@@ -460,12 +487,14 @@ export default function App() {
       setImgKey(Date.now());
     } catch (e) {
       console.error("Error fetching data", e);
+    } finally {
+      setIsFetching(false);
     }
   };
 
   useEffect(() => {
     fetchData();
-  }, [appliedRange, appliedMsics, appliedEvstrs, appliedAcqHosts]);
+  }, [appliedRange, appliedMsics, appliedMssns, appliedEvstrs, appliedAcqHosts, fetchTrigger]);
 
 
   const handleZoomIn = () => {
@@ -502,10 +531,12 @@ export default function App() {
     if (r.start) params.append('start_unix', r.start);
     if (r.end) params.append('end_unix', r.end);
     if (appliedMsics !== null) appliedMsics.length === 0 ? params.append('msics', '__NONE__') : appliedMsics.forEach(m => params.append('msics', m));
+    if (appliedMssns !== null) appliedMssns.length === 0 ? params.append('mssns', '__NONE__') : appliedMssns.forEach(m => params.append('mssns', m));
     if (appliedEvstrs !== null) appliedEvstrs.length === 0 ? params.append('evstrs', '__NONE__') : appliedEvstrs.forEach(e => params.append('evstrs', e));
     if (appliedAcqHosts !== null) appliedAcqHosts.length === 0 ? params.append('acq_hosts', '__NONE__') : appliedAcqHosts.forEach(h => params.append('acq_hosts', h));
     
     try {
+      setIsFetching(true);
       const res = await fetch('/api/stats/coverage_table?' + params.toString());
       const json = await res.json();
       setCoverageData(json);
@@ -513,27 +544,33 @@ export default function App() {
       setMaxCoverageDuration(maxVal);
     } catch (e) {
       console.error(e);
+    } finally {
+      setIsFetching(false);
     }
   };
 
   useEffect(() => {
     if (activeTab === 'coverage') fetchCoverage();
-  }, [activeTab, appliedRange, isRelativeMode, relativeValue, relativeUnit, appliedMsics, appliedEvstrs, appliedAcqHosts, imgKey]);
+  }, [activeTab, appliedRange, isRelativeMode, relativeValue, relativeUnit, appliedMsics, appliedMssns, appliedEvstrs, appliedAcqHosts, fetchTrigger]);
 
   const handleApplyFilters = () => {
     setAppliedRange(stagedRange);
     setAppliedMsics(stagedMsics);
+    setAppliedMssns(stagedMssns);
     setAppliedEvstrs(stagedEvstrs);
     setAppliedAcqHosts(stagedAcqHosts);
+    setFetchTrigger(t => t + 1);
   };
 
   const handleResetFilters = () => {
     setStagedRange(globalBounds);
     setStagedMsics(null);
+    setStagedMssns(null);
     setStagedEvstrs(null);
     setStagedAcqHosts(null);
     setAppliedRange(globalBounds);
     setAppliedMsics(null);
+    setAppliedMssns(null);
     setAppliedEvstrs(null);
     setAppliedAcqHosts(null);
   };
@@ -570,7 +607,7 @@ export default function App() {
     { field: 'tag_acq', width: 200, hide: false },
     { field: 'uptime', width: 150, hide: false }
   ]);
-  const [pageSize, setPageSize] = useState(20);
+
 
   const buildUrlParams = () => {
     const params = new URLSearchParams();
@@ -581,6 +618,10 @@ export default function App() {
     if (appliedMsics !== null) {
       if (appliedMsics.length === 0) params.append('msics', '__NONE__');
       else appliedMsics.forEach(m => params.append('msics', m));
+    }
+    if (appliedMssns !== null) {
+      if (appliedMssns.length === 0) params.append('mssns', '__NONE__');
+      else appliedMssns.forEach(m => params.append('mssns', m));
     }
     
     if (appliedEvstrs !== null) {
@@ -604,12 +645,23 @@ export default function App() {
     return `/api/stats/histogram/${col}?${params.toString()}`;
   };
 
+  const getReceiversPieUrl = () => {
+    const params = buildUrlParams();
+    params.append('cb', imgKey);
+    params.append('theme', theme);
+    params.append('colormap', colormap);
+    return `/api/stats/receivers_nested_pie?${params.toString()}`;
+  };
   const getGanttUrl = () => {
     const params = buildUrlParams();
     params.append('cb', imgKey);
     params.append('buckets', 512);
     params.append('theme', theme);
     params.append('colormap', colormap);
+    // Explicitly enforce timeline edges
+    const r = getActiveTimeRange();
+    if (r.start) params.set('start_unix', r.start);
+    if (r.end) params.set('end_unix', r.end);
     return `/api/stats/gantt?${params.toString()}`;
   };
 
@@ -637,6 +689,11 @@ export default function App() {
           <a href="/docs" target="_blank" rel="noreferrer" style={{ fontSize: '8pt', color: 'var(--text-secondary)', textDecoration: 'none', marginLeft: '0.2rem', fontWeight: 'normal' }}>(API)</a>
         </h1>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          {isFetching && (
+            <div style={{ background: 'var(--accent-primary)', color: 'white', padding: '0.2rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 'bold', animation: 'pulse 1.5s infinite' }}>
+              Querying...
+            </div>
+          )}
           <div style={{ color: 'var(--text-secondary)' }}>
             Total records: {totalRows.toLocaleString()}
           </div>
@@ -685,8 +742,10 @@ export default function App() {
         <TimelineBrush 
           appliedRange={appliedRange}
           appliedMsics={appliedMsics} 
+          appliedMssns={appliedMssns}
           appliedEvstrs={appliedEvstrs}
           appliedAcqHosts={appliedAcqHosts}
+          fetchTrigger={fetchTrigger}
           stagedRange={stagedRange}
           onRangeChange={setStagedRange} 
           isRelativeMode={isRelativeMode}
@@ -699,6 +758,16 @@ export default function App() {
           onZoomOut={handleZoomOut}
         />
         
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', minWidth: '160px', justifyContent: 'flex-end' }}>
+          <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', textAlign: 'center', width: '100%' }}>MSSN</label>
+          <MultiSelect 
+            options={availableMssns} 
+            selected={stagedMssns} 
+            onChange={setStagedMssns} 
+            placeholder="All MSSNs" 
+          />
+        </div>
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', minWidth: '160px', justifyContent: 'flex-end' }}>
           <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', textAlign: 'center', width: '100%' }}>RECEIVER</label>
           <MultiSelect 
@@ -753,12 +822,17 @@ export default function App() {
       {activeTab === 'database' && <DatabaseView />}
 
       {activeTab === 'coverage' && (
-        <div className="card full-width" style={{ height: '500px', display: 'flex', flexDirection: 'column' }}>
+        <div className="card full-width" style={{ display: 'flex', flexDirection: 'column' }}>
           <h2><Activity size={20} /> Coverage</h2>
-          <div className={theme === 'dark' ? "ag-theme-alpine-dark" : "ag-theme-alpine"} style={{ width: '100%', flex: 1, marginTop: '1rem' }}>
+          <div className={theme === 'dark' ? "ag-theme-alpine-dark" : "ag-theme-alpine"} style={{ width: '100%', marginTop: '1rem' }}>
             <AgGridReact
               key={colormap}
               rowData={coverageData}
+              pagination={true}
+              paginationPageSize={10}
+              paginationPageSizeSelector={[10, 20, 50, 100]}
+              domLayout="autoHeight"
+
               columnDefs={[
                 { 
                   field: 'num_receivers', 
@@ -831,62 +905,62 @@ export default function App() {
         <div className="dashboard-grid">
           <div className="card full-width">
             <h2><BarChart2 size={20}/> Events</h2>
-            <div className="chart-container" style={{ width: '100%' }}>
-              <img src={getHistUrl('evstr')} alt="Events Histogram" style={{ width: '100%', height: 'auto', display: 'block' }} />
+            <div className="chart-container" style={{ width: '100%', height: '350px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+              <img src={getHistUrl('evstr')} alt="Events Histogram" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }} />
             </div>
           </div>
-          <div className="card">
-            <h2><Clock size={20}/> Activity by Hour</h2>
-            <div className="chart-container" style={{ width: '100%' }}>
-              <img src={getHistUrl('hour')} alt="Hour Histogram" style={{ width: '100%', height: 'auto', display: 'block' }} />
-            </div>
+          <div style={{ display: 'flex', gap: '1.5rem', width: '100%', gridColumn: '1 / -1' }}>
+              <div className="card" style={{ flex: '1 1 33%' }}>
+                <h2><Calendar size={20}/> Activity by Date</h2>
+                <div className="chart-container" style={{ width: '100%', height: '350px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                  <img src={getHistUrl('date8')} alt="Date Histogram" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }} />
+                </div>
+              </div>
+              <div className="card" style={{ flex: '1 1 67%' }}>
+                <h2><Clock size={20}/> Activity by Hour</h2>
+                <div className="chart-container" style={{ width: '100%', height: '350px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                  <img src={getHistUrl('hour')} alt="Hour Histogram" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }} />
+                </div>
+              </div>
           </div>
-          <div className="card">
-            <h2><Calendar size={20}/> Activity by Date</h2>
-            <div className="chart-container" style={{ width: '100%' }}>
-              <img src={getHistUrl('date8')} alt="Date Histogram" style={{ width: '100%', height: 'auto', display: 'block' }} />
-            </div>
-          </div>
-          <div className="card">
-            <h2><Database size={20}/> Receivers</h2>
-            <div className="chart-container" style={{ width: '100%' }}>
-              <img src={getHistUrl('msic')} alt="MSIC Histogram" style={{ width: '100%', height: 'auto', display: 'block' }} />
-            </div>
-          </div>
-          <div className="card">
-            <h2><Database size={20}/> Acquisition Hosts</h2>
-            <div className="chart-container" style={{ width: '100%' }}>
-              <img src={getHistUrl('acq_host')} alt="Acq Host Histogram" style={{ width: '100%', height: 'auto', display: 'block' }} />
-            </div>
+          <div style={{ display: 'flex', gap: '1.5rem', width: '100%', gridColumn: '1 / -1' }}>
+              <div className="card" style={{ flex: '1 1 50%' }}>
+                <h2><Database size={20}/> Receivers</h2>
+                <div className="chart-container" style={{ width: '100%', height: '350px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                  <img src={getReceiversPieUrl()} alt="Receivers Nested Donut" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }} />
+                </div>
+              </div>
+              <div className="card" style={{ flex: '1 1 50%' }}>
+                <h2><Database size={20}/> Acquisition Hosts</h2>
+                <div className="chart-container" style={{ width: '100%', height: '350px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                  <img src={getHistUrl('acq_host')} alt="Acq Host Histogram" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }} />
+                </div>
+              </div>
           </div>
         </div>
       )}
 
       {activeTab === 'data' && (
-        <div className="card full-width">
+        <div className="card full-width" style={{ display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <h2><Database size={20} /> Raw Data Explorer</h2>
             <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
               <button onClick={() => gridApi && gridApi.exportDataAsCsv()} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.8rem', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', cursor: 'pointer' }}>
                 <Download size={16} /> Export CSV
               </button>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <label style={{ fontSize: '0.85rem', fontWeight: 500 }}>Page Size:</label>
-                <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} style={{ padding: '0.4rem 0.8rem', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}>
-                  {[10, 20, 50, 100, 500, 1000].map(size => <option key={size} value={size}>{size}</option>)}
-                </select>
-              </div>
+
               <ColumnSelector columns={colDefs} setColumns={setColDefs} />
             </div>
           </div>
 
-          <div className={theme === 'dark' ? "ag-theme-alpine-dark" : "ag-theme-alpine"} style={{ height: 600, width: '100%' }}>
-            <AgGridReact 
-              rowData={data} 
-              columnDefs={colDefs} 
-              pagination={true} 
-              paginationPageSize={pageSize} 
-              domLayout="normal"
+          <div className={theme === 'dark' ? "ag-theme-alpine-dark" : "ag-theme-alpine"} style={{ flex: 1, width: '100%', minHeight: '600px' }}>
+            <AgGridReact
+              rowData={data}
+              columnDefs={colDefs}
+              pagination={true}
+              paginationPageSize={10}
+              paginationPageSizeSelector={[10, 20, 50, 100]}
+              domLayout="autoHeight"
               onGridReady={(params) => setGridApi(params.api)}
               onRowClicked={(e) => setSelectedRow(e.data)}
               rowStyle={{ cursor: 'pointer' }}

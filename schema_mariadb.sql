@@ -36,3 +36,5 @@ CREATE INDEX idx_pred_time_msic_evstr ON PRED_info(unix_us, msic, evstr);
 CREATE INDEX idx_pred_msic ON PRED_info(msic);
 CREATE INDEX idx_pred_evstr ON PRED_info(evstr);
 CREATE INDEX idx_coverage_group ON PRED_info(date8, time8, msic);
+CREATE INDEX idx_pred_mssn ON PRED_info(mssn);
+CREATE INDEX idx_pred_acq_host ON PRED_info(acq_host);
