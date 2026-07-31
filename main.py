@@ -21,7 +21,7 @@ import os
 DB_PATH = "test.db"
 DATABASE_URL = os.environ.get('DATABASE_URL')
 DB_SCHEMA = os.environ.get('DB_SCHEMA', '')
-TBL = f"{DB_SCHEMA}.{TBL}" if DB_SCHEMA else "PRED_info"
+TBL = f"{DB_SCHEMA}.PRED_info" if DB_SCHEMA else "PRED_info"
 
 if DATABASE_URL and (DATABASE_URL.startswith('postgres://') or DATABASE_URL.startswith('postgresql://')):
     db_adapter = PostgresAdapter(DATABASE_URL)

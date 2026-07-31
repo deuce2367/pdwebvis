@@ -4,6 +4,9 @@ import contextlib
 from abc import ABC, abstractmethod
 import urllib.parse
 
+DB_SCHEMA = os.environ.get('DB_SCHEMA', '')
+TBL = f"{DB_SCHEMA}.PRED_info" if DB_SCHEMA else "PRED_info"
+
 class BaseCursor(ABC):
     @abstractmethod
     def execute(self, query, params=None):
@@ -147,7 +150,7 @@ class SQLiteAdapter(DatabaseAdapter):
             
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) as count FROM PRED_info")
+            cursor.execute(f"SELECT COUNT(*) as count FROM {TBL}")
             row = cursor.fetchone()
             stats["total_rows"] = row["count"] if row else 0
             
@@ -243,7 +246,7 @@ class PostgresAdapter(DatabaseAdapter):
             else:
                 stats["file_size_mb"] = "Unknown"
                 
-            cursor.execute("SELECT COUNT(*) as count FROM PRED_info")
+            cursor.execute(f"SELECT COUNT(*) as count FROM {TBL}")
             row = cursor.fetchone()
             stats["total_rows"] = row["count"] if row else 0
             
@@ -322,7 +325,7 @@ class MariaDBAdapter(DatabaseAdapter):
     def get_stats(self) -> dict:
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) as c FROM PRED_info")
+            cursor.execute(f"SELECT COUNT(*) as c FROM {TBL}")
             row = cursor.fetchone()
             count = row['c'] if row else 0
             
