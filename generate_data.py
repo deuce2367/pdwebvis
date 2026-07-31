@@ -27,13 +27,17 @@ def generate_random_string(length):
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
 
 def generate_data(hours, interval):
-    # mssn pool: typically 4 to 8 distinct values, between 2000 and 4999
-    num_global_mssn = random.randint(4, 8)
+    # mssn pool: typically 3 to 6 distinct values, between 2000 and 4999
+    num_global_mssn = random.randint(3, 6)
     global_mssn_pool = random.sample(range(2000, 5000), num_global_mssn)
-    
-    # suffix pool: 10 to 20 distinct values
-    num_global_suffix = random.randint(10, 20)
+
+    # suffix pool: 6 to 12 distinct values
+    num_global_suffix = random.randint(6, 12)
     global_suffix_pool = random.sample(range(0, 100), num_global_suffix)
+    
+    print(f"[*] Initialized Global Pools:")
+    print(f"    MSSNs ({num_global_mssn}): {global_mssn_pool}")
+    print(f"    Suffixes ({num_global_suffix}): {[f'{i:02d}' for i in global_suffix_pool]}")
     
     num_acq_hosts = random.randint(2, 6)
     acq_hosts = [f"acqhost{n:02d}" for n in random.sample(range(1, 100), num_acq_hosts)]

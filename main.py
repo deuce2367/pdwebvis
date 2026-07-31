@@ -129,7 +129,7 @@ def get_histogram(
     acq_hosts: list[str] = Query(None),
     mssns: list[str] = Query(None),
     theme: str = Query("light"),
-    colormap: str = Query("IN1")
+    colormap: str = Query("Paired")
 ):
     where_clause, params = build_time_filter(start_unix, end_unix, msics, evstrs, acq_hosts, mssns)
     
@@ -205,7 +205,7 @@ def get_histogram(
                 counts, 
                 labels=None, 
                 autopct='%1.1f%%', 
-                pctdistance=0.75,
+                pctdistance=0.85,
                 colors=colors,
                 textprops={'color': text_color, 'fontsize': 16, 'weight': 'bold'},
                 wedgeprops={'width': 0.4, 'edgecolor': bg_color},
@@ -273,7 +273,7 @@ def get_gantt(
     mssns: list[str] = Query(None),
     buckets: int = Query(360),
     theme: str = Query("light"),
-    colormap: str = Query("IN1")
+    colormap: str = Query("Paired")
 ):
     where_clause, params = build_time_filter(start_unix, end_unix, msics, evstrs, acq_hosts, mssns)
     
@@ -395,7 +395,7 @@ def get_gantt(
         ax.set_ylim(0, len(msic_buckets) * 10)
     
     ax.xaxis_date()
-    ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M'))
     ax.xaxis.set_major_locator(mdates.AutoDateLocator(maxticks=24))
     plt.xticks(rotation=45, ha='right')
     ax.tick_params(top=False, right=False)
@@ -554,7 +554,7 @@ def get_receivers_pie(
     acq_hosts: list[str] = Query(None),
     mssns: list[str] = Query(None),
     theme: str = Query("light"),
-    colormap: str = Query("IN1")
+    colormap: str = Query("Paired")
 ):
     where_clause, params = build_time_filter(start_unix, end_unix, msics, evstrs, acq_hosts, mssns)
     
@@ -632,17 +632,21 @@ def get_receivers_pie(
 
     size = 0.3
     
-    # Outer ring
-    ax.pie(mssn_vals, radius=1.3, colors=outer_colors,
-           wedgeprops=dict(width=size, edgecolor=bg_color),
-           labels=[f"MSSN {l}" for l in mssn_labels], textprops={'color': text_color, 'weight': 'bold', 'fontsize': 14})
-           
-    # Inner ring
+    # Outer ring (MSIC)
+    ax.pie(msic_vals, radius=1.3, colors=inner_colors,
+           wedgeprops=dict(width=size, edgecolor=bg_color, alpha=0.7),
+           labels=msic_labels, labeldistance=1.02, textprops={'color': text_color, 'weight': 'bold', 'fontsize': 14})
+
+    # Inner ring (MSSN)
     # We use a slightly modified color array for inner by reducing alpha or just using same colors but distinct edges
-    inner_wedgeprops = dict(width=size, edgecolor=bg_color, alpha=0.7)
-    ax.pie(msic_vals, radius=1.3-size, colors=inner_colors,
+    inner_wedgeprops = dict(width=size, edgecolor=bg_color)
+    wedges, texts = ax.pie(mssn_vals, radius=1.3-size, colors=outer_colors,
            wedgeprops=inner_wedgeprops,
-           labels=msic_labels, labeldistance=0.75, textprops={'color': text_color, 'fontsize': 12, 'weight': 'bold'})
+           labels=[f"{l}" for l in mssn_labels], labeldistance=0.75, textprops={'color': 'white', 'fontsize': 14, 'weight': 'bold'})
+           
+    import matplotlib.patheffects as path_effects
+    for t in texts:
+        t.set_path_effects([path_effects.withStroke(linewidth=1.5, foreground='#333333')])
            
     ax.set(aspect="equal")
     
@@ -651,6 +655,96 @@ def get_receivers_pie(
     buf.seek(0)
     plt.close(fig)
     return Response(content=buf.read(), media_type="image/svg+xml")
+
+
+
+@app.get("/api/stats/activity_coverage_hist", summary="Activity Coverage Histogram")
+def get_activity_coverage_hist(
+    start_unix: float = Query(None),
+    end_unix: float = Query(None),
+    msics: list[str] = Query(None),
+    evstrs: list[str] = Query(None),
+    acq_hosts: list[str] = Query(None),
+    mssns: list[str] = Query(None),
+    theme: str = Query("light"),
+    colormap: str = Query("Paired")
+):
+    where_clause, params = build_time_filter(start_unix, end_unix, msics, evstrs, acq_hosts, mssns)
+    
+    query = f"""
+        WITH period_msics AS (
+            SELECT
+                date8,
+                time8,
+                COUNT(msic) as num_receivers,
+                MAX(nelem / (rx_srate * 1000000.0)) as period_duration
+            FROM (
+                SELECT date8, time8, msic, nelem, rx_srate
+                FROM {TBL}
+                {where_clause}
+                ORDER BY date8, time8, msic
+            ) AS subq
+            GROUP BY date8, time8
+        )
+        SELECT
+            num_receivers as bucket,
+            SUM(period_duration) as duration
+        FROM period_msics
+        GROUP BY num_receivers
+        ORDER BY num_receivers
+    """
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        
+    buckets = [r["bucket"] for r in rows]
+    durations = [r["duration"] for r in rows]
+    
+    bg_color = '#1e293b' if theme == 'dark' else '#ffffff'
+    text_color = '#f8fafc' if theme == 'dark' else '#334155'
+    spine_color = '#334155' if theme == 'dark' else '#cbd5e1'
+    
+    import numpy as np
+    import matplotlib.colors as mcolors
+    try:
+        cmap_obj = plt.get_cmap(colormap)
+    except ValueError:
+        cmap_obj = plt.get_cmap("viridis")
+        
+    fig, ax = plt.subplots(figsize=(10, 6))
+    fig.patch.set_facecolor(bg_color)
+    ax.set_facecolor(bg_color)
+    
+    if not buckets:
+        ax.text(0.5, 0.5, "No data available", ha='center', va='center', color=text_color, transform=ax.transAxes)
+        ax.axis('off')
+    else:
+        num_items = max(1, len(buckets))
+        if hasattr(cmap_obj, 'colors'):
+            colors = [cmap_obj((i*3) % len(cmap_obj.colors)) for i in range(num_items)]
+        else:
+            colors = [cmap_obj(i / max(1, num_items - 1)) for i in range(num_items)]
+            
+        ax.bar([str(b) for b in buckets], durations, color=colors, edgecolor=bg_color, zorder=3)
+        ax.set_ylabel("Total Duration (s)", color=text_color, fontsize=16, weight='bold')
+        ax.set_xlabel("# of Receivers", color=text_color, fontsize=16, weight='bold')
+        
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_color(spine_color)
+        ax.spines['bottom'].set_color(spine_color)
+        ax.tick_params(colors=text_color, labelsize=14)
+        ax.grid(axis='y', color=spine_color, linestyle='-', alpha=0.3, zorder=0)
+
+    plt.tight_layout()
+    buf = io.BytesIO()
+    fig.savefig(buf, format='svg', transparent=True)
+    buf.seek(0)
+    plt.close(fig)
+    return Response(content=buf.read(), media_type="image/svg+xml")
+
 
 # Mount static frontend if exists
 if os.path.exists("frontend/dist"):

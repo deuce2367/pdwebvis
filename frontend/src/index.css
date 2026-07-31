@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+/* Web fonts removed for offline mode */
 
 :root {
   --bg-primary: #f8fafc;
@@ -33,7 +33,7 @@
 }
 
 body {
-  font-family: 'Inter', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   background: var(--bg-primary);
   color: var(--text-primary);
   min-height: 100vh;
@@ -183,7 +183,7 @@ header h1 {
   color: var(--text-primary);
   padding: 0.5rem 0.75rem;
   border-radius: 6px;
-  font-family: 'Inter', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   outline: none;
   transition: border-color 0.2s;
 }

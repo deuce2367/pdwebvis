@@ -338,6 +338,39 @@ const TimelineBrush = ({ appliedRange, appliedMsics, appliedMssns, appliedEvstrs
 };
 
 
+
+const ImageWithStatus = ({ src, alt, style, onLoadingChange }) => {
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    setLoading(true);
+    if (onLoadingChange) onLoadingChange(true);
+    
+    return () => {
+      if (onLoadingChange) onLoadingChange(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [src]);
+
+  const handleLoadComplete = () => {
+    setLoading(false);
+    if (onLoadingChange) onLoadingChange(false);
+  };
+
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+      {loading && <div style={{ position: 'absolute', opacity: 0.6, fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Rendering...</div>}
+      <img 
+        src={src} 
+        alt={alt} 
+        style={{ ...style, opacity: loading ? 0.3 : 1, transition: 'opacity 0.2s' }} 
+        onLoad={handleLoadComplete}
+        onError={handleLoadComplete}
+      />
+    </div>
+  );
+};
+
 export default function App() {
   const [data, setData] = useState([]);
   const [totalRows, setTotalRows] = useState(0);
@@ -353,9 +386,14 @@ export default function App() {
   const [relativeUnit, setRelativeUnit] = useState('minutes');
   const [maxCoverageDuration, setMaxCoverageDuration] = useState(1);
   const [coverageData, setCoverageData] = useState([]);
-  const [colormap, setColormap] = useState('IN1');
+  const [colormap, setColormap] = useState('Paired');
   const [showPalette, setShowPalette] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
+  const [imagesLoading, setImagesLoading] = useState(0);
+
+  const handleImageLoadingChange = (isLoading) => {
+    setImagesLoading(prev => isLoading ? prev + 1 : Math.max(0, prev - 1));
+  };
   const [fetchTrigger, setFetchTrigger] = useState(0);
 
   useEffect(() => {
@@ -645,6 +683,14 @@ export default function App() {
     return `/api/stats/histogram/${col}?${params.toString()}`;
   };
 
+  const getActivityCoverageHistUrl = () => {
+    const params = buildUrlParams();
+    params.append('cb', imgKey);
+    params.append('theme', theme);
+    params.append('colormap', colormap);
+    return `/api/stats/activity_coverage_hist?${params.toString()}`;
+  };
+
   const getReceiversPieUrl = () => {
     const params = buildUrlParams();
     params.append('cb', imgKey);
@@ -689,9 +735,9 @@ export default function App() {
           <a href="/docs" target="_blank" rel="noreferrer" style={{ fontSize: '8pt', color: 'var(--text-secondary)', textDecoration: 'none', marginLeft: '0.2rem', fontWeight: 'normal' }}>(API)</a>
         </h1>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-          {isFetching && (
+          {(isFetching || imagesLoading > 0) && (
             <div style={{ background: 'var(--accent-primary)', color: 'white', padding: '0.2rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 'bold', animation: 'pulse 1.5s infinite' }}>
-              Querying...
+              {isFetching ? 'Querying...' : 'Rendering...'}
             </div>
           )}
           <div style={{ color: 'var(--text-secondary)' }}>
@@ -895,7 +941,7 @@ export default function App() {
           <div className="card">
             <h2><Activity size={20} /> Activity <span style={{ fontSize: '0.9em', color: 'var(--text-secondary)', marginLeft: '8px', fontWeight: 'normal' }}>{getBinSizeStr()}</span></h2>
             <div className="gantt-container" style={{ textAlign: 'center', width: '100%' }}>
-              <img src={getGanttUrl()} alt="Gantt Chart" style={{ width: '100%', height: 'auto', display: 'block' }} />
+              <ImageWithStatus src={getGanttUrl()} alt="Gantt Chart" style={{ width: '100%', height: 'auto', display: 'block' }} onLoadingChange={handleImageLoadingChange} />
             </div>
           </div>
         </div>
@@ -906,34 +952,42 @@ export default function App() {
           <div className="card full-width">
             <h2><BarChart2 size={20}/> Events</h2>
             <div className="chart-container" style={{ width: '100%', height: '350px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-              <img src={getHistUrl('evstr')} alt="Events Histogram" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }} />
+              <ImageWithStatus src={getHistUrl('evstr')} alt="Events Histogram" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }} onLoadingChange={handleImageLoadingChange} />
             </div>
           </div>
           <div style={{ display: 'flex', gap: '1.5rem', width: '100%', gridColumn: '1 / -1' }}>
               <div className="card" style={{ flex: '1 1 33%' }}>
                 <h2><Calendar size={20}/> Activity by Date</h2>
                 <div className="chart-container" style={{ width: '100%', height: '350px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                  <img src={getHistUrl('date8')} alt="Date Histogram" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }} />
+                  <ImageWithStatus src={getHistUrl('date8')} alt="Date Histogram" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }} onLoadingChange={handleImageLoadingChange} />
                 </div>
               </div>
               <div className="card" style={{ flex: '1 1 67%' }}>
                 <h2><Clock size={20}/> Activity by Hour</h2>
                 <div className="chart-container" style={{ width: '100%', height: '350px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                  <img src={getHistUrl('hour')} alt="Hour Histogram" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }} />
+                  <ImageWithStatus src={getHistUrl('hour')} alt="Hour Histogram" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }} onLoadingChange={handleImageLoadingChange} />
                 </div>
               </div>
           </div>
           <div style={{ display: 'flex', gap: '1.5rem', width: '100%', gridColumn: '1 / -1' }}>
-              <div className="card" style={{ flex: '1 1 50%' }}>
+              <div className="card" style={{ flex: 1 }}>
                 <h2><Database size={20}/> Receivers</h2>
                 <div className="chart-container" style={{ width: '100%', height: '350px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                  <img src={getReceiversPieUrl()} alt="Receivers Nested Donut" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }} />
+                  <ImageWithStatus src={getReceiversPieUrl()} alt="Receivers Nested Donut" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }} onLoadingChange={handleImageLoadingChange} />
                 </div>
               </div>
-              <div className="card" style={{ flex: '1 1 50%' }}>
+              
+              <div className="card" style={{ flex: 1 }}>
+                <h2><Activity size={20} /> Activity Coverage</h2>
+                <div className="chart-container" style={{ width: '100%', height: '350px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                  <ImageWithStatus src={getActivityCoverageHistUrl()} alt="Activity Coverage Histogram" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }} onLoadingChange={handleImageLoadingChange} />
+                </div>
+              </div>
+
+              <div className="card" style={{ flex: 1 }}>
                 <h2><Database size={20}/> Acquisition Hosts</h2>
                 <div className="chart-container" style={{ width: '100%', height: '350px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                  <img src={getHistUrl('acq_host')} alt="Acq Host Histogram" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }} />
+                  <ImageWithStatus src={getHistUrl('acq_host')} alt="Acq Host Histogram" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }} onLoadingChange={handleImageLoadingChange} />
                 </div>
               </div>
           </div>
