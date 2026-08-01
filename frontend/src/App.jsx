@@ -382,8 +382,8 @@ export default function App() {
   const [selectedRow, setSelectedRow] = useState(null);
   const [isLiveMode, setIsLiveMode] = useState(false);
   const [isRelativeMode, setIsRelativeMode] = useState(false);
-  const [relativeValue, setRelativeValue] = useState(15);
-  const [relativeUnit, setRelativeUnit] = useState('minutes');
+  const [relativeValue, setRelativeValue] = useState(24);
+  const [relativeUnit, setRelativeUnit] = useState('hours');
   const [maxCoverageDuration, setMaxCoverageDuration] = useState(1);
   const [coverageData, setCoverageData] = useState([]);
   const [colormap, setColormap] = useState('Paired');
@@ -420,14 +420,36 @@ export default function App() {
   const [availableEvstrs, setAvailableEvstrs] = useState([]);
   const [availableAcqHosts, setAvailableAcqHosts] = useState([]);
   
+  const [gridMaxHeight, setGridMaxHeight] = useState(600);
+
+  useEffect(() => {
+    const updateHeight = () => {
+      const gridContainer = document.getElementById('ag-grid-container');
+      if (gridContainer) {
+        const top = gridContainer.getBoundingClientRect().top;
+        const available = window.innerHeight - top - 64; // 60px padding buffer for page bottom
+        setGridMaxHeight(Math.max(300, available));
+      }
+    };
+    
+    // Slight delay to allow DOM to render and flex to settle
+    const timer = setTimeout(updateHeight, 50);
+    window.addEventListener('resize', updateHeight);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', updateHeight);
+    };
+  }, [activeTab]);
+
   const [imgKey, setImgKey] = useState(Date.now());
   
   const [filtersInitialized, setFiltersInitialized] = useState(false);
   const [globalBounds, setGlobalBounds] = useState({ start: null, end: null });
 
-  const getActiveTimeRange = () => {
+  const getActiveTimeRange = (useRealTime = false) => {
     if (isRelativeMode) {
-      const end_u = Date.now() * 1000;
+      const anchor_ms = useRealTime ? Date.now() : imgKey;
+      const end_u = anchor_ms * 1000;
       let multiplier = 60 * 1000000;
       if (relativeUnit === 'seconds') multiplier = 1000000;
       if (relativeUnit === 'hours') multiplier = 60 * 60 * 1000000;
@@ -443,7 +465,7 @@ export default function App() {
 
   const fetchFilters = async () => {
     const params = new URLSearchParams();
-    const r = getActiveTimeRange();
+    const r = getActiveTimeRange(true);
     if (r.start) params.append('start_unix', r.start);
     if (r.end) params.append('end_unix', r.end);
     
@@ -476,7 +498,7 @@ export default function App() {
     if (!isLiveMode) return;
     const timer = setInterval(() => {
       if (isRelativeMode) {
-        setImgKey(Date.now());
+        setFetchTrigger(t => t + 1);
       } else {
         fetch('/api/stats/filters').then(r => r.json()).then(json => {
           if (json.max_unix && globalBounds.end && json.max_unix > globalBounds.end) {
@@ -491,7 +513,7 @@ export default function App() {
   }, [isLiveMode, isRelativeMode, globalBounds.end]);
 
   const fetchData = async () => {
-    const r = getActiveTimeRange();
+    const r = getActiveTimeRange(true);
     if (!r.start && !r.end) return;
 
     const params = new URLSearchParams();
@@ -521,7 +543,6 @@ export default function App() {
       const json = await res.json();
       setData(json.data);
       setTotalRows(json.total);
-      
       setImgKey(Date.now());
     } catch (e) {
       console.error("Error fetching data", e);
@@ -537,7 +558,7 @@ export default function App() {
 
   const handleZoomIn = () => {
     setIsRelativeMode(false);
-    const r = getActiveTimeRange();
+    const r = getActiveTimeRange(true);
     if (!r.start || !r.end) return;
     const dur = r.end - r.start;
     const mid = r.start + dur / 2;
@@ -550,7 +571,7 @@ export default function App() {
 
   const handleZoomOut = () => {
     setIsRelativeMode(false);
-    const r = getActiveTimeRange();
+    const r = getActiveTimeRange(true);
     if (!r.start || !r.end) return;
     const dur = r.end - r.start;
     const mid = r.start + dur / 2;
@@ -565,7 +586,7 @@ export default function App() {
 
   const fetchCoverage = async () => {
     const params = new URLSearchParams();
-    const r = getActiveTimeRange();
+    const r = getActiveTimeRange(true);
     if (r.start) params.append('start_unix', r.start);
     if (r.end) params.append('end_unix', r.end);
     if (appliedMsics !== null) appliedMsics.length === 0 ? params.append('msics', '__NONE__') : appliedMsics.forEach(m => params.append('msics', m));
@@ -773,7 +794,9 @@ export default function App() {
                     onClick={() => { setColormap(cm.name); setShowPalette(false); }}
                     style={{ padding: '0.5rem', cursor: 'pointer', borderRadius: '4px', background: colormap === cm.name ? 'var(--border-color)' : 'transparent', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}
                   >
-                    <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>{cm.label}</div>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                      {cm.label} {colormap === cm.name && <span style={{ color: 'var(--accent-primary)', marginLeft: '4px' }}>*</span>}
+                    </div>
                     <div style={{ height: '12px', width: '100%', borderRadius: '3px', background: cm.gradient }} />
                   </div>
                 ))}
@@ -786,16 +809,23 @@ export default function App() {
       <div className="filters-bar" style={{ display: 'flex', gap: '0.8rem', justifyContent: 'center', alignItems: 'flex-end', flexWrap: 'wrap', background: 'var(--bg-primary)', padding: '1.2rem', borderRadius: '8px', border: '1px solid var(--border-color)', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
         
         <TimelineBrush 
-          appliedRange={appliedRange}
+          appliedRange={getActiveTimeRange(false)}
           appliedMsics={appliedMsics} 
           appliedMssns={appliedMssns}
           appliedEvstrs={appliedEvstrs}
           appliedAcqHosts={appliedAcqHosts}
           fetchTrigger={fetchTrigger}
-          stagedRange={stagedRange}
+          stagedRange={isRelativeMode ? getActiveTimeRange(false) : stagedRange}
           onRangeChange={setStagedRange} 
           isRelativeMode={isRelativeMode}
-          setIsRelativeMode={setIsRelativeMode}
+          setIsRelativeMode={(val) => {
+            if (!val && isRelativeMode) {
+              const r = getActiveTimeRange(true);
+              setStagedRange(r);
+              setAppliedRange(r);
+            }
+            setIsRelativeMode(val);
+          }}
           relativeValue={relativeValue}
           setRelativeValue={setRelativeValue}
           relativeUnit={relativeUnit}
@@ -870,14 +900,13 @@ export default function App() {
       {activeTab === 'coverage' && (
         <div className="card full-width" style={{ display: 'flex', flexDirection: 'column' }}>
           <h2><Activity size={20} /> Coverage</h2>
-          <div className={theme === 'dark' ? "ag-theme-alpine-dark" : "ag-theme-alpine"} style={{ width: '100%', marginTop: '1rem' }}>
+          <div id="ag-grid-container" className={theme === 'dark' ? "ag-theme-alpine-dark" : "ag-theme-alpine"} style={{ width: '100%', marginTop: '1rem', height: `${Math.max(10, coverageData.length) * 42 + 100}px`, maxHeight: `${gridMaxHeight}px` }}>
             <AgGridReact
               key={colormap}
               rowData={coverageData}
               pagination={true}
-              paginationPageSize={10}
-              paginationPageSizeSelector={[10, 20, 50, 100]}
-              domLayout="autoHeight"
+              paginationPageSize={25}
+              paginationPageSizeSelector={[25, 50, 100, 500]}
 
               columnDefs={[
                 { 
@@ -1007,14 +1036,13 @@ export default function App() {
             </div>
           </div>
 
-          <div className={theme === 'dark' ? "ag-theme-alpine-dark" : "ag-theme-alpine"} style={{ flex: 1, width: '100%', minHeight: '600px' }}>
+          <div id="ag-grid-container" className={theme === 'dark' ? "ag-theme-alpine-dark" : "ag-theme-alpine"} style={{ width: '100%', height: `${Math.max(10, data.length) * 42 + 100}px`, maxHeight: `${gridMaxHeight}px` }}>
             <AgGridReact
               rowData={data}
               columnDefs={colDefs}
               pagination={true}
-              paginationPageSize={10}
-              paginationPageSizeSelector={[10, 20, 50, 100]}
-              domLayout="autoHeight"
+              paginationPageSize={25}
+              paginationPageSizeSelector={[25, 50, 100, 500]}
               onGridReady={(params) => setGridApi(params.api)}
               onRowClicked={(e) => setSelectedRow(e.data)}
               rowStyle={{ cursor: 'pointer' }}

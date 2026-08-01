@@ -713,19 +713,21 @@ def get_activity_coverage_hist(
     except ValueError:
         cmap_obj = plt.get_cmap("viridis")
         
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(10, 8))
     fig.patch.set_facecolor(bg_color)
     ax.set_facecolor(bg_color)
-    
-    if not buckets:
-        ax.text(0.5, 0.5, "No data available", ha='center', va='center', color=text_color, transform=ax.transAxes)
+
+    if hasattr(cmap_obj, 'colors'):
+        primary_color = mcolors.to_hex(cmap_obj.colors[0])
+    else:
+        primary_color = mcolors.to_hex(cmap_obj(0.0))
+
+    if not buckets or sum(durations) == 0:
+        ax.text(0.5, 0.5, "No data available", ha='center', va='center', color=text_color, transform=ax.transAxes, fontsize=16, weight='bold')
         ax.axis('off')
     else:
         num_items = max(1, len(buckets))
-        if hasattr(cmap_obj, 'colors'):
-            colors = [cmap_obj((i*3) % len(cmap_obj.colors)) for i in range(num_items)]
-        else:
-            colors = [cmap_obj(i / max(1, num_items - 1)) for i in range(num_items)]
+        colors = [primary_color] * len(buckets)
             
         ax.bar([str(b) for b in buckets], durations, color=colors, edgecolor=bg_color, zorder=3)
         ax.set_ylabel("Total Duration (s)", color=text_color, fontsize=16, weight='bold')
