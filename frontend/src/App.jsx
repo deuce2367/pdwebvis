@@ -7,18 +7,18 @@ import DatabaseView from './DatabaseView';
 
 const COLORMAPS = [
   { name: 'Blues', label: 'Blues', gradient: 'linear-gradient(to right, #eff3ff, #bdd7e7, #6baed6, #3182bd, #08519c)' },
-  { name: 'bone_r', label: 'Bone Reversed', gradient: 'linear-gradient(to right, #ffffff, #c7c7c7, #929292, #636363, #363636, #000000)' },
-  { name: 'Dark2_r', label: 'Dark 2 Reversed', gradient: 'linear-gradient(to right, #e6ab02, #66a61e, #e7298a, #7570b3, #d95f02, #1b9e77)' },
+  { name: 'bone_r', label: 'Bone', gradient: 'linear-gradient(to right, #ffffff, #c7c7c7, #929292, #636363, #363636, #000000)' },
+  { name: 'Dark2_r', label: 'Dark 2', gradient: 'linear-gradient(to right, #e6ab02, #66a61e, #e7298a, #7570b3, #d95f02, #1b9e77)' },
   { name: 'Greens', label: 'Greens', gradient: 'linear-gradient(to right, #edf8e9, #bae4b3, #74c476, #31a354, #006d2c)' },
   { name: 'Greys', label: 'Greys', gradient: 'linear-gradient(to right, #f7f7f7, #cccccc, #969696, #636363, #252525)' },
   { name: 'IN1', label: 'IN1', gradient: 'linear-gradient(to right, #ebac23, #b80058, #008cf9, #006e00, #00bbad, #d163e6, #b24502, #ff9287, #5954d6, #00c6f8, #878500, #00a76c, #bdbdbd)' },
   { name: 'Paired', label: 'Paired', gradient: 'linear-gradient(to right, #a6cee3, #1f78b4, #b2df8a, #33a02c, #fb9a99, #e31a1c)' },
   { name: 'Purples', label: 'Purples', gradient: 'linear-gradient(to right, #f2f0f7, #cbc9e2, #9e9ac8, #756bb1, #54278f)' },
-  { name: 'RdPu_r', label: 'Red-Purple Reversed', gradient: 'linear-gradient(to right, #7a0177, #c51b8a, #f768a1, #fbb4b9, #feebe2)' },
+  { name: 'RdPu_r', label: 'Red-Purple', gradient: 'linear-gradient(to right, #7a0177, #c51b8a, #f768a1, #fbb4b9, #feebe2)' },
   { name: 'Reds', label: 'Reds', gradient: 'linear-gradient(to right, #fee5d9, #fcae91, #fb6a4a, #de2d26, #a50f15)' },
   { name: 'summer', label: 'Summer', gradient: 'linear-gradient(to right, #008066, #66b366, #ccff66, #ffff66)' },
   { name: 'tab20', label: 'Tab 20', gradient: 'linear-gradient(to right, #1f77b4, #aec7e8, #ff7f0e, #ffbb78, #2ca02c, #98df8a)' },
-  { name: 'YlGnBu_r', label: 'Yellow-Green-Blue Reversed', gradient: 'linear-gradient(to right, #081d58, #225ea8, #41b6c4, #7fcdbb, #c7e9b4, #ffffcc)' }
+  { name: 'YlGnBu_r', label: 'Yellow-Green-Blue', gradient: 'linear-gradient(to right, #081d58, #225ea8, #41b6c4, #7fcdbb, #c7e9b4, #ffffcc)' }
 ];
 
 const MultiSelect = ({ options, selected, onChange, placeholder }) => {
@@ -891,7 +891,7 @@ export default function App() {
         <button className={`tab-btn ${activeTab === 'summary' ? 'active' : ''}`} onClick={() => setActiveTab('summary')}>Summary</button>
         <button className={`tab-btn ${activeTab === 'timeline' ? 'active' : ''}`} onClick={() => setActiveTab('timeline')}>Timeline</button>
         <button className={`tab-btn ${activeTab === 'coverage' ? 'active' : ''}`} onClick={() => setActiveTab('coverage')}>Coverage</button>
-        <button className={`tab-btn ${activeTab === 'data' ? 'active' : ''}`} onClick={() => setActiveTab('data')}>Data Table</button>
+        <button className={`tab-btn ${activeTab === 'data' ? 'active' : ''}`} onClick={() => setActiveTab('data')}>Table</button>
         <button className={`tab-btn ${activeTab === 'database' ? 'active' : ''}`} onClick={() => setActiveTab('database')}>Database</button>
       </div>
       
@@ -1026,7 +1026,7 @@ export default function App() {
       {activeTab === 'data' && (
         <div className="card full-width" style={{ display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h2><Database size={20} /> Raw Data Explorer</h2>
+            <h2><Database size={20} /> Data Explorer</h2>
             <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
               <button onClick={() => gridApi && gridApi.exportDataAsCsv()} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.8rem', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', cursor: 'pointer' }}>
                 <Download size={16} /> Export CSV

@@ -197,7 +197,7 @@ def get_histogram(
         labels = [format_msic(b) if col == "msic" else b for b in bins]
         
         if not counts or sum(counts) == 0:
-            ax.text(0.5, 0.5, "No data available", ha='center', va='center', color=text_color, transform=ax.transAxes)
+            ax.text(0.5, 0.5, "No data available", ha='center', va='center', color=text_color, transform=ax.transAxes, fontsize=16, weight='bold')
             ax.axis('off')
         else:
             # Donut plot
