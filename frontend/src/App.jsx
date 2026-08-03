@@ -752,7 +752,8 @@ export default function App() {
     <div className="app-container">
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h1 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          Data Visualization Dashboard
+          <img src="/pistol.svg" alt="Logo" style={{ height: '36px', width: 'auto', marginRight: '4px' }} />
+          Activity Dashboard
           <a href="/docs" target="_blank" rel="noreferrer" style={{ fontSize: '8pt', color: 'var(--text-secondary)', textDecoration: 'none', marginLeft: '0.2rem', fontWeight: 'normal' }}>(API)</a>
         </h1>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
