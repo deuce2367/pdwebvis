@@ -1,0 +1,9 @@
+FROM grafana/grafana:latest
+
+# Copy the provisioning configuration so Grafana boots up fully connected to TimescaleDB
+COPY grafana/provisioning /etc/grafana/provisioning
+
+# Optional: Disable login form / allow anonymous access for local development
+ENV GF_AUTH_ANONYMOUS_ENABLED=true
+ENV GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+ENV GF_AUTH_DISABLE_LOGIN_FORM=true

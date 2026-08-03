@@ -1,6 +1,7 @@
 #FROM postgis/postgis:18-3.6-alpine
 #FROM timescale/timescaledb:latest-pg18
-FROM timescale/timescaledb-ha:pg18-all-oss
+#FROM timescale/timescaledb-ha:pg18-all-oss
+FROM timescale/timescaledb-ha:pg18-all
 
 COPY schema_pg.sql /docker-entrypoint-initdb.d/
 
