@@ -6,9 +6,11 @@ import { Activity, BarChart2, Calendar, Database, Clock, Filter, ChevronLeft, Ch
 import DatabaseView from './DatabaseView';
 
 const COLORMAPS = [
+  { name: 'americana', label: 'Americana', gradient: 'linear-gradient(to right, #67001f, #b2182b, #d6604d, #f4a582, #fddbc7, #f7f7f7, #d1e5f0, #92c5de, #4393c3, #2166ac, #053061)' },
   { name: 'Blues', label: 'Blues', gradient: 'linear-gradient(to right, #eff3ff, #bdd7e7, #6baed6, #3182bd, #08519c)' },
   { name: 'bone_r', label: 'Bone', gradient: 'linear-gradient(to right, #ffffff, #c7c7c7, #929292, #636363, #363636, #000000)' },
   { name: 'Dark2_r', label: 'Dark 2', gradient: 'linear-gradient(to right, #e6ab02, #66a61e, #e7298a, #7570b3, #d95f02, #1b9e77)' },
+  { name: 'elegant', label: 'Elegant', gradient: 'linear-gradient(to right, #543005, #8c510a, #bf812d, #dfc27d, #f6e8c3, #f5f5f5, #c7eae5, #80cdc1, #35978f, #01665e, #003c30)' },
   { name: 'Greens', label: 'Greens', gradient: 'linear-gradient(to right, #edf8e9, #bae4b3, #74c476, #31a354, #006d2c)' },
   { name: 'Greys', label: 'Greys', gradient: 'linear-gradient(to right, #f7f7f7, #cccccc, #969696, #636363, #252525)' },
   { name: 'IN1', label: 'IN1', gradient: 'linear-gradient(to right, #ebac23, #b80058, #008cf9, #006e00, #00bbad, #d163e6, #b24502, #ff9287, #5954d6, #00c6f8, #878500, #00a76c, #bdbdbd)' },
@@ -16,7 +18,9 @@ const COLORMAPS = [
   { name: 'Purples', label: 'Purples', gradient: 'linear-gradient(to right, #f2f0f7, #cbc9e2, #9e9ac8, #756bb1, #54278f)' },
   { name: 'RdPu_r', label: 'Red-Purple', gradient: 'linear-gradient(to right, #7a0177, #c51b8a, #f768a1, #fbb4b9, #feebe2)' },
   { name: 'Reds', label: 'Reds', gradient: 'linear-gradient(to right, #fee5d9, #fcae91, #fb6a4a, #de2d26, #a50f15)' },
-  { name: 'summer', label: 'Summer', gradient: 'linear-gradient(to right, #008066, #66b366, #ccff66, #ffff66)' },
+  { name: 'royal', label: 'Royal', gradient: 'linear-gradient(to right, #a50026, #d73027, #f46d43, #fdae61, #fee090, #ffffbf, #ffffff, #e0f3f8, #abd9e9, #74add1, #4575b4, #313695)' },
+  { name: 'verdant', label: 'Verdant', gradient: 'linear-gradient(to right, #008066, #66b366, #ccff66, #ffff66)' },
+  { name: 'summer2', label: 'Summer2', gradient: 'linear-gradient(to right, #a50026, #d73027, #f46d43, #fdae61, #fee08b, #ffffbf, #ffffff, #d9ef8b, #a6d96a, #66bd63, #1a9850, #006837)' },
   { name: 'tab20', label: 'Tab 20', gradient: 'linear-gradient(to right, #1f77b4, #aec7e8, #ff7f0e, #ffbb78, #2ca02c, #98df8a)' },
   { name: 'YlGnBu_r', label: 'Yellow-Green-Blue', gradient: 'linear-gradient(to right, #081d58, #225ea8, #41b6c4, #7fcdbb, #c7e9b4, #ffffcc)' }
 ];

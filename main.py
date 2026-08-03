@@ -119,6 +119,18 @@ plt.rcParams.update({'font.size': 10})
 in1_colors = ['#ebac23', '#b80058', '#008cf9', '#006e00', '#00bbad', '#d163e6', '#b24502', '#ff9287', '#5954d6', '#00c6f8', '#878500', '#00a76c', '#bdbdbd']
 plt.colormaps.register(cmap=mcolors.ListedColormap(in1_colors, name='IN1'))
 
+elegant_colors = ['#543005', '#8c510a', '#bf812d', '#dfc27d', '#f6e8c3', '#f5f5f5', '#c7eae5', '#80cdc1', '#35978f', '#01665e', '#003c30']
+plt.colormaps.register(cmap=mcolors.ListedColormap(elegant_colors, name='elegant'))
+
+americana_colors = ['#67001f', '#b2182b', '#d6604d', '#f4a582', '#fddbc7', '#f7f7f7', '#d1e5f0', '#92c5de', '#4393c3', '#2166ac', '#053061']
+plt.colormaps.register(cmap=mcolors.ListedColormap(americana_colors, name='americana'))
+
+royal_colors = ['#a50026', '#d73027', '#f46d43', '#fdae61', '#fee090', '#ffffbf', '#ffffff', '#e0f3f8', '#abd9e9', '#74add1', '#4575b4', '#313695']
+plt.colormaps.register(cmap=mcolors.ListedColormap(royal_colors, name='royal'))
+
+summer2_colors = ['#a50026', '#d73027', '#f46d43', '#fdae61', '#fee08b', '#ffffbf', '#ffffff', '#d9ef8b', '#a6d96a', '#66bd63', '#1a9850', '#006837']
+plt.colormaps.register(cmap=mcolors.ListedColormap(summer2_colors, name='summer2'))
+
 @app.get("/api/stats/histogram/{col}", summary="Histogram Plot", description="Generates a matplotlib SVG showing the distribution of the selected column.")
 def get_histogram(
     col: str,
