@@ -40,7 +40,7 @@ def get_metric_name(index):
         return PLAUSIBLE_METRICS[index]
     return f"custom_metric_{index}"
 
-def setup_database(conn, table_name, num_metrics, geospatial, retention_days=None):
+def setup_database(conn, table_name, num_metrics, geospatial, retention_days=None, chunk_interval="1 day"):
     """Create the table and turn it into a TimescaleDB hypertable if it doesn't exist."""
     with conn.cursor() as cur:
         # Build column definitions
@@ -75,22 +75,34 @@ def setup_database(conn, table_name, num_metrics, geospatial, retention_days=Non
         
         # Convert to TimescaleDB hypertable
         cur.execute(f"""
-            SELECT create_hypertable('{table_name}', 'time', if_not_exists => TRUE);
+            SELECT create_hypertable('{table_name}', 'time', chunk_time_interval => INTERVAL '{chunk_interval}', if_not_exists => TRUE);
         """)
+        
+        # Ensure chunk time interval is updated if hypertable already existed
+        cur.execute(f"""
+            SELECT set_chunk_time_interval('{table_name}', INTERVAL '{chunk_interval}');
+        """)
+        
+        # Commit table and hypertable changes first so they aren't rolled back if retention fails
+        conn.commit()
         
         # Apply data retention policy if specified
         if retention_days:
             try:
+                cur.execute(f"SELECT remove_retention_policy('{table_name}', if_exists => true);")
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                
+            try:
                 cur.execute(f"""
                     SELECT add_retention_policy('{table_name}', INTERVAL '{retention_days} days');
                 """)
+                conn.commit()
                 print(f"[*] Retention policy set: Data older than {retention_days} days will be auto-dropped by TimescaleDB.")
-            except psycopg2.errors.UniqueViolation:
-                # Retention policy might already exist
-                pass
             except Exception as e:
-                print(f"[!] Note: Could not set native retention policy. You may need to use pg_cron or upgrade to TimescaleDB Community Edition. Error: {e}")
                 conn.rollback()
+                print(f"[!] Note: Could not set native retention policy. You may need to use pg_cron or upgrade to TimescaleDB Community Edition. Error: {e}")
 
         # Create an index on device_id and time for faster querying
         cur.execute(f"""
@@ -193,11 +205,22 @@ def main():
     parser.add_argument("--backfill", type=int, default=int(os.environ.get("BACKFILL_HOURS", 0)), help="Number of hours of historical data to backfill (default: 0)")
     parser.add_argument("--devices", type=int, default=int(os.environ.get("DEVICES", 3)), help="Number of distinct devices to simulate (default: 3)")
     parser.add_argument("--retention-days", type=int, default=int(os.environ.get("RETENTION_DAYS", 0)), help="Auto-drop data older than this many days (0 to disable)")
+    parser.add_argument("--chunk-interval", default=os.environ.get("CHUNK_INTERVAL", "auto"), help="TimescaleDB chunk time interval (default: auto)")
     
     env_debug = os.environ.get("DEBUG", "false").lower() in ("true", "1", "yes")
     parser.add_argument("--debug", action="store_true", default=env_debug, help="Enable debug mode to print inserted data")
     
     args = parser.parse_args()
+
+    if args.chunk_interval == "auto":
+        if args.retention_days > 0 and args.retention_days <= 3:
+            args.chunk_interval = "12 hours"
+        elif args.retention_days > 3 and args.retention_days <= 30:
+            args.chunk_interval = "1 day"
+        elif args.retention_days > 30:
+            args.chunk_interval = "7 days"
+        else:
+            args.chunk_interval = "1 day"
 
     if not args.url:
         print("[!] Error: Database URL is required. Provide it via --url or DATABASE_URL environment variable.")
@@ -215,6 +238,7 @@ def main():
     print(f"    - Geospatial   : {'Enabled' if args.geospatial else 'Disabled'}")
     print(f"    - Backfill     : {args.backfill} hours")
     print(f"    - Retention    : {args.retention_days} days")
+    print(f"    - Chunk Size   : {args.chunk_interval}")
     print(f"    - Debug Mode   : {'Enabled' if args.debug else 'Disabled'}")
     print("="*50)
     print("\n[*] Connecting to database...")
@@ -225,7 +249,7 @@ def main():
         return
 
     try:
-        setup_database(conn, args.table, args.metrics, args.geospatial, args.retention_days)
+        setup_database(conn, args.table, args.metrics, args.geospatial, args.retention_days, args.chunk_interval)
         
         if args.backfill > 0:
             run_backfill(conn, args.table, args.backfill, args.interval, args.metrics, args.geospatial, args.devices)
