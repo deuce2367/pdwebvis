@@ -285,7 +285,9 @@ def get_gantt(
     mssns: list[str] = Query(None),
     buckets: int = Query(360),
     theme: str = Query("light"),
-    colormap: str = Query("Paired")
+    colormap: str = Query("Paired"),
+    w: float = Query(None),
+    h: float = Query(None)
 ):
     where_clause, params = build_time_filter(start_unix, end_unix, msics, evstrs, acq_hosts, mssns)
     
@@ -304,7 +306,10 @@ def get_gantt(
             max_unix = end_unix
         
         if not min_unix or not max_unix:
-            fig, ax = plt.subplots(figsize=(15, 4))
+            if w and h:
+                fig, ax = plt.subplots(figsize=(w / 100.0, h / 100.0))
+            else:
+                fig, ax = plt.subplots(figsize=(15, 4))
             buf = io.BytesIO()
             fig.savefig(buf, format='svg', bbox_inches='tight', transparent=True)
             buf.seek(0)
@@ -321,7 +326,7 @@ def get_gantt(
             SELECT 
                 msic,
                 CAST((unix_us - ?) / ? AS INTEGER) as bucket,
-                COUNT(*) as count
+                SUM(CASE WHEN rx_srate > 0 THEN nelem / (rx_srate * 1000000.0) ELSE 0 END) as count
             FROM {TBL}
             {where_clause}
             GROUP BY msic, bucket
@@ -344,8 +349,11 @@ def get_gantt(
             if count > max_count:
                 max_count = count
 
-    fig_height = max(8, len(msic_buckets) * 0.5)
-    fig, ax = plt.subplots(figsize=(30, fig_height))
+    if w and h:
+        fig, ax = plt.subplots(figsize=(w / 100.0, h / 100.0))
+    else:
+        fig_height = max(8, len(msic_buckets) * 0.5)
+        fig, ax = plt.subplots(figsize=(30, fig_height))
     
     bg_color = '#1e293b' if theme == 'dark' else '#ffffff'
     text_color = '#f8fafc' if theme == 'dark' else '#334155'
@@ -385,7 +393,9 @@ def get_gantt(
             md_start = mdates.date2num(dt)
             dur_days = (bucket_size / 1000000.0) / (24 * 3600)
             
-            alpha = max(0.1, count / max_count)
+            bucket_size_sec = bucket_size / 1000000.0
+            alpha = min(1.0, count / max(1.0, bucket_size_sec))
+            alpha = max(0.1, alpha)
             edge_color = '#1e293b' if theme == 'dark' else '#334155'
             rect = patches.Rectangle((md_start, y_pos + 1), dur_days, 8, facecolor=color, alpha=alpha, edgecolor=edge_color, linewidth=0.5, zorder=3)
             ax.add_patch(rect)
@@ -402,6 +412,7 @@ def get_gantt(
     display_duration_us = max(max_unix - min_unix, bucket_size)
     max_dt = datetime.utcfromtimestamp((min_unix + display_duration_us) / 1000000.0)
     
+    ax.margins(x=0)
     ax.set_xlim(mdates.date2num(min_dt), mdates.date2num(max_dt))
     if len(msic_buckets) > 0:
         ax.set_ylim(0, len(msic_buckets) * 10)
@@ -412,8 +423,9 @@ def get_gantt(
     plt.xticks(rotation=45, ha='right')
     ax.tick_params(top=False, right=False)
 
+    plt.tight_layout(pad=0.1)
     buf = io.BytesIO()
-    fig.savefig(buf, format='svg', bbox_inches='tight', transparent=True)
+    fig.savefig(buf, format='svg', transparent=True)
     buf.seek(0)
     plt.close(fig)
     return Response(content=buf.read(), media_type="image/svg+xml")
@@ -645,16 +657,19 @@ def get_receivers_pie(
     size = 0.3
     
     # Outer ring (MSIC)
+    total_msic = sum(msic_vals)
+    msic_labels_filtered = [l if (v/max(1,total_msic)) > 0.02 else "" for l, v in zip(msic_labels, msic_vals)]
     ax.pie(msic_vals, radius=1.3, colors=inner_colors,
            wedgeprops=dict(width=size, edgecolor=bg_color, alpha=0.7),
-           labels=msic_labels, labeldistance=1.02, textprops={'color': text_color, 'weight': 'bold', 'fontsize': 14})
+           labels=msic_labels_filtered, labeldistance=1.02, textprops={'color': text_color, 'weight': 'bold', 'fontsize': 14})
 
     # Inner ring (MSSN)
-    # We use a slightly modified color array for inner by reducing alpha or just using same colors but distinct edges
+    total_mssn = sum(mssn_vals)
+    mssn_labels_filtered = [f"{l}" if (v/max(1,total_mssn)) > 0.03 else "" for l, v in zip(mssn_labels, mssn_vals)]
     inner_wedgeprops = dict(width=size, edgecolor=bg_color)
     wedges, texts = ax.pie(mssn_vals, radius=1.3-size, colors=outer_colors,
            wedgeprops=inner_wedgeprops,
-           labels=[f"{l}" for l in mssn_labels], labeldistance=0.75, textprops={'color': 'white', 'fontsize': 14, 'weight': 'bold'})
+           labels=mssn_labels_filtered, labeldistance=0.75, textprops={'color': 'white', 'fontsize': 14, 'weight': 'bold'})
            
     import matplotlib.patheffects as path_effects
     for t in texts:
@@ -741,8 +756,21 @@ def get_activity_coverage_hist(
         num_items = max(1, len(buckets))
         colors = [primary_color] * len(buckets)
             
-        ax.bar([str(b) for b in buckets], durations, color=colors, edgecolor=bg_color, zorder=3)
-        ax.set_ylabel("Total Duration (s)", color=text_color, fontsize=16, weight='bold')
+        bars = ax.bar([str(b) for b in buckets], durations, color=colors, edgecolor=bg_color, zorder=3)
+        for bar in bars:
+            height = bar.get_height()
+            if height > 0:
+                sec = height
+                if sec < 60:
+                    lbl = f"{sec:.1f}s"
+                elif sec < 3600:
+                    lbl = f"{sec/60:.1f}m"
+                elif sec < 86400:
+                    lbl = f"{sec/3600:.1f}h"
+                else:
+                    lbl = f"{sec/86400:.1f}d"
+                ax.text(bar.get_x() + bar.get_width()/2., height, lbl, ha='center', va='bottom', color=text_color, fontsize=12, weight='bold')
+        ax.set_ylabel("Total Duration", color=text_color, fontsize=16, weight='bold')
         ax.set_xlabel("# of Receivers", color=text_color, fontsize=16, weight='bold')
         
         ax.spines['top'].set_visible(False)
@@ -750,7 +778,7 @@ def get_activity_coverage_hist(
         ax.spines['left'].set_color(spine_color)
         ax.spines['bottom'].set_color(spine_color)
         ax.tick_params(colors=text_color, labelsize=14)
-        ax.grid(axis='y', color=spine_color, linestyle='-', alpha=0.3, zorder=0)
+        ax.set_yticks([])
 
     plt.tight_layout()
     buf = io.BytesIO()

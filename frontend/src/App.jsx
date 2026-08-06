@@ -211,7 +211,13 @@ const TimelineBrush = ({ appliedRange, appliedMsics, appliedMssns, appliedEvstrs
   const handleManualApply = () => {
     const st = parseDt(manualStart);
     const en = parseDt(manualEnd);
-    if (st && en) onRangeChange({ start: st, end: en });
+    if (st && en) {
+      if (en <= st) {
+        alert("Invalid time range: 'To' must be strictly greater than 'From'.");
+        return;
+      }
+      onRangeChange({ start: st, end: en });
+    }
   };
 
   let startPct = 0;
@@ -424,6 +430,7 @@ export default function App() {
   const [availableEvstrs, setAvailableEvstrs] = useState([]);
   const [availableAcqHosts, setAvailableAcqHosts] = useState([]);
   
+  const [timelineSize, setTimelineSize] = useState({ w: null, h: null });
   const [gridMaxHeight, setGridMaxHeight] = useState(600);
 
   useEffect(() => {
@@ -433,6 +440,12 @@ export default function App() {
         const top = gridContainer.getBoundingClientRect().top;
         const available = window.innerHeight - top - 64; // 60px padding buffer for page bottom
         setGridMaxHeight(Math.max(300, available));
+      }
+      
+      const ganttContainer = document.getElementById('gantt-container');
+      if (ganttContainer) {
+        const top = ganttContainer.getBoundingClientRect().top;
+        setTimelineSize({ w: ganttContainer.clientWidth, h: Math.max(300, window.innerHeight - top - 64) });
       }
     };
     
@@ -565,6 +578,7 @@ export default function App() {
     const r = getActiveTimeRange(true);
     if (!r.start || !r.end) return;
     const dur = r.end - r.start;
+    if (dur <= 1000000) return;
     const mid = r.start + dur / 2;
     const newDur = dur / 2;
     const newStart = mid - newDur / 2;
@@ -582,8 +596,6 @@ export default function App() {
     const newDur = dur * 2;
     let newStart = mid - newDur / 2;
     let newEnd = mid + newDur / 2;
-    if (globalBounds.start && newStart < globalBounds.start) newStart = globalBounds.start;
-    if (globalBounds.end && newEnd > globalBounds.end) newEnd = globalBounds.end;
     setStagedRange({ start: newStart, end: newEnd });
     setAppliedRange({ start: newStart, end: newEnd });
   };
@@ -729,6 +741,10 @@ export default function App() {
     params.append('buckets', 512);
     params.append('theme', theme);
     params.append('colormap', colormap);
+    if (timelineSize.w && timelineSize.h) {
+      params.append('w', timelineSize.w);
+      params.append('h', timelineSize.h);
+    }
     // Explicitly enforce timeline edges
     const r = getActiveTimeRange();
     if (r.start) params.set('start_unix', r.start);
@@ -955,7 +971,7 @@ export default function App() {
                          <span style={{ width: '60px', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
                            {formatted}
                          </span>
-                         <div style={{ flex: 1, background: 'var(--bg-secondary)', height: '12px', borderRadius: '2px', overflow: 'hidden' }}>
+                         <div style={{ flex: 1, background: 'var(--bg-secondary)', height: '12px', borderRadius: '2px', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
                            <div style={{ width: `${pct}%`, background: barColor, height: '100%' }}></div>
                          </div>
                        </div>
@@ -971,12 +987,10 @@ export default function App() {
 
       
       {activeTab === 'timeline' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }} className="full-width">
-          <div className="card">
-            <h2><Activity size={20} /> Activity <span style={{ fontSize: '0.9em', color: 'var(--text-secondary)', marginLeft: '8px', fontWeight: 'normal' }}>{getBinSizeStr()}</span></h2>
-            <div className="gantt-container" style={{ textAlign: 'center', width: '100%' }}>
-              <ImageWithStatus src={getGanttUrl()} alt="Gantt Chart" style={{ width: '100%', height: 'auto', display: 'block' }} onLoadingChange={handleImageLoadingChange} />
-            </div>
+        <div className="card full-width" style={{ display: 'flex', flexDirection: 'column' }}>
+          <h2><Activity size={20} /> Activity <span style={{ fontSize: '0.9em', color: 'var(--text-secondary)', marginLeft: '8px', fontWeight: 'normal' }}>{getBinSizeStr()}</span></h2>
+          <div id="gantt-container" className="gantt-container" style={{ width: '100%', marginTop: '1rem', height: `${gridMaxHeight}px`, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <ImageWithStatus src={getGanttUrl()} alt="Gantt Chart" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }} onLoadingChange={handleImageLoadingChange} />
           </div>
         </div>
       )}
